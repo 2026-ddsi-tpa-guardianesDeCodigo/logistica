@@ -2,13 +2,13 @@
 # 🧪 2026 - Trabajo Práctico Anual
 
 ## 👤 Datos del Alumno
-- **Nombre:**
-- **Apellido:**
+- **Nombre: Facundo**
+- **Apellido: Harche**
 
 ---
 
 🧩 Componente Desarrollado
--
+- Logistica
 
 ---
 
