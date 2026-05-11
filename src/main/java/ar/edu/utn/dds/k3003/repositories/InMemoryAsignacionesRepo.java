@@ -49,7 +49,7 @@ public class InMemoryAsignacionesRepo implements AsignacionesRepository{
     @Override
     public Asignacion updateEstado(String asignacionID, EstadoAsginacionEnum estadoAsginacionEnum) {
 
-        var asignacion   = this.findById(asignacionID).orElseThrow(() -> new AsignacionNoEncontrada( "No existe la asignación"));
+        var asignacion  = this.findById(asignacionID).orElseThrow(() -> new AsignacionNoEncontrada( "No existe la asignación"));
 
         asignacion.setEstado(estadoAsginacionEnum);
 

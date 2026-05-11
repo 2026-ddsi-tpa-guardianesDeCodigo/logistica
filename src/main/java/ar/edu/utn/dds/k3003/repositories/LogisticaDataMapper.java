@@ -55,6 +55,7 @@ public class LogisticaDataMapper {
   }
   public Asignacion toAsignacion(AsignacionDTO asignacionDTO){
     var asignacion =  new Asignacion(
+            asignacionDTO.id(),
             asignacionDTO.paqueteID(),
             asignacionDTO.necesidadID(),
             asignacionDTO.fecha(),

@@ -1,7 +1,7 @@
 package ar.edu.utn.dds.k3003;
 
-import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.TipoNecesidadMaterialEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonaciones;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonadoresYEntidades;
@@ -10,7 +10,6 @@ import ar.edu.utn.dds.k3003.exceptions.*;
 import ar.edu.utn.dds.k3003.model.*;
 import ar.edu.utn.dds.k3003.repositories.*;
 import lombok.val;
-import org.springframework.cglib.core.Local;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -20,7 +19,6 @@ import java.util.NoSuchElementException;
 import static ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum.ACEPTADA;
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.ASIGNADA;
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.COMPLETADA;
-import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum.SUB_ATENDIDOS;
 
 public class Fachada implements FachadaLogistica {
 
@@ -28,7 +26,6 @@ public class Fachada implements FachadaLogistica {
   private AsignacionesRepository asignacionesActivasRepository;
   private AsignacionesRepository historialAsignacionesRepository;
   private LogisticaDataMapper logisticaDataMapper = new LogisticaDataMapper();
-  private Algoritmo algoritmo;
   private FachadaDonaciones fachadaDonaciones;
   private FachadaDonadoresYEntidades  fachadaDonadoresYEntidades;
 
@@ -37,7 +34,6 @@ public class Fachada implements FachadaLogistica {
     this.depositosRepository = new InMemoryDepositosRepo();
     this.asignacionesActivasRepository = new InMemoryAsignacionesRepo();
     this.historialAsignacionesRepository = new InMemoryAsignacionesRepo();
-    this.setAlgoritmoMM("FALTA", SUB_ATENDIDOS);
   }
 
   @Override
@@ -86,53 +82,63 @@ public class Fachada implements FachadaLogistica {
       throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
     }
 
-    val paquete = new Paquete ("DonacionN", productoID, cantidad);
+    val paquete = new Paquete (donacionID, productoID, cantidad);
 
     deposito.agregarPaquete(paquete);
+    depositosRepository.save(deposito);
 
-    val necesidadesInsatisfechasDTO = necesidadesMaterialesDTO.stream()
-            .map(material -> new NecesidadMaterialDTO(
-                    material.id(),
-                    material.entidadID(),
-                    material.nivelDeUrgencia(),
-                    material.descripcion(),
-                    material.cantidadObjetivo(),
-                    material.productoSolicitadoID(),
-                    material.tipo()
-            ))
-            .toList();
 
-    val asignacionDTO = this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paquete), necesidadesInsatisfechasDTO);
+    val asignacionDTO = this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paquete), necesidadesMaterialesDTO );
 
-    fachadaDonadoresYEntidades.satisfacerNecesidad(asignacionDTO.necesidadID(), cantidad);
+    asignacionesActivasRepository.save(logisticaDataMapper.toAsignacion(asignacionDTO));
+    historialAsignacionesRepository.save(logisticaDataMapper.toAsignacion(asignacionDTO));
 
-    return depositoDTO;
+    return logisticaDataMapper.toDepositoDTO(deposito);
   }
 
   @Override
   public void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum tipoAlgoritmo) {
-    algoritmo = new PrioridadASubAtendidos();
+    Deposito deposito = depositosRepository.findById(depositoID)
+            .orElseThrow(() -> new DepositoNoEncontradoException("No existe un deposito con ese ID"));
 
+    Algoritmo algoritmo = switch (tipoAlgoritmo) {
+      case SUB_ATENDIDOS -> new PrioridadASubAtendidos();
+      case PRIORIDAD_POR_SCORE -> new PrioridadPorScore();
+    };
+    deposito.setAlgoritmoObj(algoritmo);
+    depositosRepository.save(deposito);
   }
 
   @Override
   public AsignacionDTO ejecutarMatchmaking(String depositoID, PaqueteDTO paqueteDTO, List<NecesidadMaterialDTO> necesidadesDTO) {
 
-    List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDTO.stream().map(logisticaDataMapper::toNecesidadDeEntidad).toList();
+    Deposito deposito = depositosRepository.findById(depositoID)
+            .orElseThrow(() -> new DepositoNoEncontradoException("No existe un deposito con ese ID"));
+
+    Algoritmo algoritmoDelDeposito = deposito.getAlgoritmoObj();
+    if (algoritmoDelDeposito == null) {
+      throw new AlgoritmoNoConfiguradoException("El depósito no tiene algoritmo configurado");
+    }
+
+    List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDTO.stream().
+            map(logisticaDataMapper::toNecesidadDeEntidad).
+            toList();
 
     val paquete = logisticaDataMapper.toPaquete(paqueteDTO);
 
-    val necesidadDeEntidad = algoritmo.correr(paquete, necesidadesDeEntidades);
+    val necesidadElegida = algoritmoDelDeposito.correr(paquete, necesidadesDeEntidades);
 
-    val asignacion = new Asignacion(paquete.getId(),necesidadDeEntidad.getId(), LocalDateTime.now(),ASIGNADA);
+    val necesidadElegidaDTO = necesidadesDTO.stream()
+            .filter(n -> n.id().equals(necesidadElegida.getId()))
+            .findFirst()
+            .orElseThrow();
 
-    val asignacionHistorial = new Asignacion(asignacion.getId(), asignacion.getNecesidadID(), asignacion.getFecha(), asignacion.getEstado());
+    if (necesidadElegidaDTO.tipo() == TipoNecesidadMaterialEnum.RECURRENTE
+            && paquete.getCantidad() < necesidadElegidaDTO.cantidadObjetivo()) {
+      throw new DonacionParcialNoPermitida("Las necesidades recurrentes no admiten donaciones parciales");
+    }
 
-    asignacionHistorial.setId(asignacion.getId());
-
-    asignacionesActivasRepository.save(asignacion);
-
-    historialAsignacionesRepository.save(asignacionHistorial);
+    val asignacion = new Asignacion(LocalDateTime.now().toString(), paquete.getId(), necesidadElegida.getId(), LocalDateTime.now(), ASIGNADA);
 
     return logisticaDataMapper.toAsignacionDTO(asignacion);
   }
@@ -140,15 +146,15 @@ public class Fachada implements FachadaLogistica {
   @Override
   public void reportarEntrega(PaqueteDTO paqueteDTO) {
 
-    fachadaDonaciones.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
-
     AsignacionDTO asignacionDTO = this.buscarAsignacionPorPaqueteID(paqueteDTO.id());
+
+    fachadaDonadoresYEntidades.satisfacerNecesidad(asignacionDTO.necesidadID(), paqueteDTO.cantidad());
+
+    fachadaDonaciones.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
 
     asignacionesActivasRepository.updateEstado(asignacionDTO.id(),COMPLETADA);
 
-    var asignacionHistorial = new Asignacion(asignacionDTO.id(), asignacionDTO.necesidadID(), asignacionDTO.fecha(), COMPLETADA);
-
-    asignacionHistorial.setId(asignacionDTO.id());
+    var asignacionHistorial = new Asignacion(asignacionDTO.id(), paqueteDTO.id(), asignacionDTO.necesidadID(), asignacionDTO.fecha(), COMPLETADA);
 
     historialAsignacionesRepository.save(asignacionHistorial);
 
@@ -167,19 +173,30 @@ public class Fachada implements FachadaLogistica {
   public AsignacionDTO agregarAsignacion (AsignacionDTO asignacionDTO ){
 
     if(asignacionesActivasRepository.findById(asignacionDTO .id()).isPresent()){
-      throw new DepositoYaExistenteException("Ya existe una asignacion con ese ID");
+      throw new AsignacionYaExistenteException("Ya existe una asignacion con ese ID");
     }
     val nuevaAsignacion = logisticaDataMapper.toAsignacion(asignacionDTO);
 
     val asignacionGuardada = asignacionesActivasRepository.save(nuevaAsignacion);
 
-    val asignacionHistorial = new Asignacion(asignacionGuardada.getPaqueteID(), asignacionGuardada.getNecesidadID(), asignacionDTO.fecha(), asignacionGuardada.getEstado());
-
-    asignacionHistorial.setId(asignacionGuardada.getId());
+    val asignacionHistorial = new Asignacion(asignacionGuardada.getId(), asignacionGuardada.getPaqueteID(), asignacionGuardada.getNecesidadID(), asignacionDTO.fecha(), asignacionGuardada.getEstado());
 
     historialAsignacionesRepository.save(asignacionHistorial);
 
     return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
+  }
+
+  public DepositoDTO borrarDeposito(String depositoID){
+    var deposito = depositosRepository.deleteById(depositoID);
+    return logisticaDataMapper.toDepositoDTO(deposito);
+  }
+
+  public AsignacionDTO  buscarAsignacionPorID (String asignacionID){
+
+    val asignacion = asignacionesActivasRepository.findById(asignacionID).
+            orElseThrow(() -> new AsignacionNoEncontrada("No existe una asignacion con ese ID")) ;
+
+    return logisticaDataMapper.toAsignacionDTO(asignacion);
   }
 
 }

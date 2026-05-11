@@ -14,6 +14,7 @@ public class Deposito {
 
   private String id;
   private TipoAlgoritmoEnum algoritmo;
+  private Algoritmo algoritmoObj = null;
   private String nombre;
   private String direccion;
   private Integer capacidadMaxima;
@@ -35,6 +36,14 @@ public class Deposito {
 
   public void setAlgoritmo(TipoAlgoritmoEnum algoritmo) {
     this.algoritmo = algoritmo;
+  }
+
+  public Algoritmo getAlgoritmoObj() {
+    return algoritmoObj;
+  }
+
+  public void setAlgoritmoObj(Algoritmo algoritmoObj) {
+    this.algoritmoObj = algoritmoObj;
   }
 
   public String getNombre() {

@@ -53,10 +53,12 @@ public class Asignacion {
     }
 
     public Asignacion (
+        String id,
         String paqueteID,
         String necesidadID,
         LocalDateTime fecha,
         EstadoAsginacionEnum estado){
+        this.id = id;
         this.paqueteID = paqueteID;
         this.necesidadID = necesidadID;
         this.fecha = fecha;
