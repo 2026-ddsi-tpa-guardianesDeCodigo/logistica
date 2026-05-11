@@ -1,12 +1,12 @@
 package ar.edu.utn.dds.k3003.repositories;
 
+import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.NecesidadDeEntidadDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
 import ar.edu.utn.dds.k3003.model.Asignacion;
 import ar.edu.utn.dds.k3003.model.Deposito;
-import ar.edu.utn.dds.k3003.model.NecesidadDeEntidad;
+import ar.edu.utn.dds.k3003.model.NecesidadMaterial;
 import ar.edu.utn.dds.k3003.model.Paquete;
 
 public class LogisticaDataMapper {
@@ -18,6 +18,7 @@ public class LogisticaDataMapper {
 
     return new DepositoDTO(
             deposito.getId(),
+            deposito.getAlgoritmo(),
             deposito.getNombre(),
             deposito.getDireccion(),
             deposito.getCapacidadMaxima(),
@@ -73,25 +74,27 @@ public class LogisticaDataMapper {
     );
   }
 
-  public NecesidadDeEntidadDTO toNecesidadDeEntidadDTO (NecesidadDeEntidad necesidad) {
-    return new NecesidadDeEntidadDTO(
+  public NecesidadMaterialDTO toNecesidadDeEntidadDTO (NecesidadMaterial necesidad) {
+    return new NecesidadMaterialDTO(
             necesidad.getId(),
             necesidad.getEntidadID(),
             necesidad.getNivelDeUrgencia(),
             necesidad.getDescripcion(),
             necesidad.getCantidadObjetivo(),
-            necesidad.getProductoSolicitado()
+            necesidad.getProductoSolicitadoID(),
+            necesidad.getTipo()
     );
   }
 
-  public NecesidadDeEntidad toNecesidadDeEntidad (NecesidadDeEntidadDTO necesidadDTO) {
-    return new NecesidadDeEntidad(
+  public NecesidadMaterial toNecesidadDeEntidad (NecesidadMaterialDTO necesidadDTO) {
+    return new NecesidadMaterial(
             necesidadDTO.id(),
             necesidadDTO.entidadID(),
             necesidadDTO.nivelDeUrgencia(),
             necesidadDTO.descripcion(),
             necesidadDTO.cantidadObjetivo(),
-            necesidadDTO.productoSolicitado()
+            necesidadDTO.productoSolicitadoID(),
+            necesidadDTO.tipo()
     );
   }
 }

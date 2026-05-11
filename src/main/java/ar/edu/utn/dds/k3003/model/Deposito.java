@@ -1,6 +1,7 @@
 package ar.edu.utn.dds.k3003.model;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.CantidadDeProductoInvalida;
 import ar.edu.utn.dds.k3003.exceptions.DepositoLleno;
 import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
@@ -12,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Deposito {
 
   private String id;
+  private TipoAlgoritmoEnum algoritmo;
   private String nombre;
   private String direccion;
   private Integer capacidadMaxima;
@@ -25,6 +27,14 @@ public class Deposito {
 
   public void setId(String id) {
     this.id = id;
+  }
+
+  public TipoAlgoritmoEnum getAlgoritmo() {
+    return algoritmo;
+  }
+
+  public void setAlgoritmo(TipoAlgoritmoEnum algoritmo) {
+    this.algoritmo = algoritmo;
   }
 
   public String getNombre() {

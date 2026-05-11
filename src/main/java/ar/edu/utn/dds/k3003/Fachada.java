@@ -1,10 +1,8 @@
 package ar.edu.utn.dds.k3003;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.NecesidadDeEntidadDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonaciones;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonadoresYEntidades;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaLogistica;
@@ -22,6 +20,7 @@ import java.util.NoSuchElementException;
 import static ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum.ACEPTADA;
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.ASIGNADA;
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.COMPLETADA;
+import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum.SUB_ATENDIDOS;
 
 public class Fachada implements FachadaLogistica {
 
@@ -38,7 +37,7 @@ public class Fachada implements FachadaLogistica {
     this.depositosRepository = new InMemoryDepositosRepo();
     this.asignacionesActivasRepository = new InMemoryAsignacionesRepo();
     this.historialAsignacionesRepository = new InMemoryAsignacionesRepo();
-    this.setAlgoritmoMM();
+    this.setAlgoritmoMM("FALTA", SUB_ATENDIDOS);
   }
 
   @Override
@@ -92,34 +91,34 @@ public class Fachada implements FachadaLogistica {
     deposito.agregarPaquete(paquete);
 
     val necesidadesInsatisfechasDTO = necesidadesMaterialesDTO.stream()
-            .map(material -> new NecesidadDeEntidadDTO(
+            .map(material -> new NecesidadMaterialDTO(
                     material.id(),
                     material.entidadID(),
                     material.nivelDeUrgencia(),
                     material.descripcion(),
                     material.cantidadObjetivo(),
-                    material.productoSolicitadoID()
+                    material.productoSolicitadoID(),
+                    material.tipo()
             ))
             .toList();
 
-    val asignacionDTO = this.ejecutarMatchmaking(logisticaDataMapper.toPaqueteDTO(paquete),necesidadesInsatisfechasDTO);
+    val asignacionDTO = this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paquete), necesidadesInsatisfechasDTO);
 
     fachadaDonadoresYEntidades.satisfacerNecesidad(asignacionDTO.necesidadID(), cantidad);
 
     return depositoDTO;
   }
 
-
   @Override
-  public void setAlgoritmoMM() {
+  public void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum tipoAlgoritmo) {
     algoritmo = new PrioridadASubAtendidos();
 
   }
 
   @Override
-  public AsignacionDTO ejecutarMatchmaking(PaqueteDTO paqueteDTO, List<NecesidadDeEntidadDTO> necesidadesDeEntidadesDTO) {
+  public AsignacionDTO ejecutarMatchmaking(String depositoID, PaqueteDTO paqueteDTO, List<NecesidadMaterialDTO> necesidadesDTO) {
 
-    List<NecesidadDeEntidad> necesidadesDeEntidades = necesidadesDeEntidadesDTO.stream().map(logisticaDataMapper::toNecesidadDeEntidad).toList();
+    List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDTO.stream().map(logisticaDataMapper::toNecesidadDeEntidad).toList();
 
     val paquete = logisticaDataMapper.toPaquete(paqueteDTO);
 

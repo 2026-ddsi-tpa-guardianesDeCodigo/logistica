@@ -1,19 +1,26 @@
 package ar.edu.utn.dds.k3003.model;
 
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.NecesidadDeEntidadDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.TipoNecesidadMaterialEnum;
 
-import java.time.LocalDateTime;
+public class NecesidadMaterial {
 
-public class NecesidadDeEntidad {
+    public NecesidadMaterial(String id,String entidadID, Integer nivelDeUrgencia, String descripcion, Integer cantidadObjetivo, String productoSolicitadoID, TipoNecesidadMaterialEnum tipo) {
+        this.id = id;
+        this.entidadID = entidadID;
+        this.nivelDeUrgencia = nivelDeUrgencia;
+        this.descripcion = descripcion;
+        this.cantidadObjetivo = cantidadObjetivo;
+        this.productoSolicitadoID = productoSolicitadoID;
+        this.tipo = tipo;
+    }
 
     private String id;
     private String entidadID;
     private Integer nivelDeUrgencia;
     private String descripcion;
     private Integer cantidadObjetivo;
-    private String productoSolicitado;
-
+    private String productoSolicitadoID;
+    private TipoNecesidadMaterialEnum tipo;
 
     public String getId() {
         return id;
@@ -55,28 +62,19 @@ public class NecesidadDeEntidad {
         this.cantidadObjetivo = cantidadObjetivo;
     }
 
-    public String getProductoSolicitado() {
-        return productoSolicitado;
+    public String getProductoSolicitadoID() {
+        return productoSolicitadoID;
     }
 
-    public void setProductoSolicitado(String productoSolicitado) {
-        this.productoSolicitado = productoSolicitado;
+    public void setProductoSolicitadoID(String productoSolicitadoID) {
+        this.productoSolicitadoID = productoSolicitadoID;
     }
 
-    public NecesidadDeEntidad (
-            String id,
-            String entidadID,
-            Integer nivelDeUrgencia,
-            String  descripcion,
-            Integer cantidadObjetivo,
-            String productoSolicitado
-    ) {
-        this.id = id;
-        this.entidadID = entidadID;
-        this.nivelDeUrgencia  = nivelDeUrgencia;
-        this.descripcion  = descripcion;
-        this.cantidadObjetivo = cantidadObjetivo;
-        this.productoSolicitado = productoSolicitado;
+    public TipoNecesidadMaterialEnum getTipo() {
+        return tipo;
+    }
 
+    public void setTipo(TipoNecesidadMaterialEnum tipo) {
+        this.tipo = tipo;
     }
 }
