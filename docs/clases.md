@@ -7,7 +7,6 @@ classDiagram
         -nombre: String
         -direccion: String
         -capacidadMaxima: Integer
-        -algoritmo: TipoAlgoritmoEnum
         -algoritmoObj: Algoritmo
         -stockActual: List~Paquete~
         -idSecuencial: AtomicLong
@@ -32,6 +31,7 @@ classDiagram
         -cantidadObjetivo: Integer
         -productoSolicitadoID: String
         -tipo: TipoNecesidadMaterialEnum
+        -cantidadDonada: Integer
     }
     
     class Asignacion {
@@ -68,12 +68,10 @@ classDiagram
         +correr(Paquete, List~NecesidadMaterial~) NecesidadMaterial
     }
 
-    Deposito --> Paquete : stockActual
+    Deposito o-- Paquete : stockActual
     Deposito --> Algoritmo : algoritmoObj
     
     Asignacion --> EstadoAsginacionEnum : estado
-    Asignacion -.->|referencia| Paquete : paqueteID
-    Asignacion -.->|referencia| NecesidadMaterial : necesidadID
 
     Algoritmo ..> Paquete : usa
     Algoritmo ..> NecesidadMaterial : usa
