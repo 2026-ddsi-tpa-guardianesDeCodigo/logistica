@@ -13,7 +13,7 @@
 ---
 
 🧩 Link al despliegue en Render
-- https://dashboard.render.com/web/srv-d83u00l7vvec73ensqmg/deploys/dep-d83u00t7vvec73ensqt0?r=2026-05-16%4003%3A08%3A55%7E2026-05-16%4003%3A13%3A32
+- https://entrega-2-facundoharche.onrender.com
 
 ---
 
