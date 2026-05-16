@@ -1,0 +1,238 @@
+openapi: 3.0.0
+info:
+  version: 1.0.0
+  title: API Logística - 2026 - DDSI - TPA
+  description: API del componente de Logística
+
+paths:
+  # ---------------- DEPOSITOS ----------------
+  /depositos:
+    post:
+      summary: Crear un deposito
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositoRequest'
+      responses:
+        '201':
+          description: Deposito creado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositoDTO'
+
+    get:
+      summary: Obtener todos los depositos
+      responses:
+        '200':
+          description: Lista de depositos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DepositoResponse'
+        '404':
+          description: Depositos no encontrados
+
+  /depositos/{id}:
+    get:
+      summary: Obtener deposito por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deposito encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositoResponse'
+        '404':
+          description: Deposito no encontrado
+
+    delete:
+      summary: Eliminar un deposito
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deposito eliminado correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositoResponse'
+        '404':
+          description: Deposito no encontrado
+
+  # ---------------- ASIGNACIONES ----------------
+  /asignaciones/{id}:
+    get:
+      summary: Obtener una asignación por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Asignación encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsignacionDTO'
+        '404':
+          description: Asignación no encontrada
+
+  # ---------------- GESTION DONACIONES ----------------
+  /depositos/{id}/donacion:
+    post:
+      summary: Gestionar una Donacion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GestionDonacionDTO'
+      responses:
+        '201':
+          description: Deposito con la donacion registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositoDTO'
+        '404':
+          description: Depósito no encontrado
+
+  # ---------------- ENTREGAS ----------------
+  /entregas:
+    post:
+      summary: Registrar la entrega de un paquete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaqueteDTO'
+      responses:
+        '201':
+          description: Entrega registrada correctamente
+        '404':
+          description: Paquete o asignacion no encontrados
+
+components:
+  schemas:
+    DepositoBase:
+      type: object
+      properties:
+        nombre:
+          type: string
+        direccion:
+          type: string
+        capacidadMaxima:
+          type: number
+    
+    DepositoRequest:
+      allOf:
+        - $ref: '#/components/schemas/DepositoBase'
+
+    DepositoResponse:
+      allOf:
+        - $ref: '#/components/schemas/DepositoDTO'
+        - type: object
+          properties:
+            id:
+              type: string
+            stockActual:
+              type: array
+              items:
+                $ref: '#/components/schemas/PaqueteDTO'
+    
+    AsignacionDTO:
+      type: object
+      properties:
+        id:
+          type: string
+        paqueteID:
+          type: string
+        necesidadID:
+          type: string
+        fecha:
+          type: string
+          format: date
+        estado:
+          type: string
+          enum: [ASIGNADA, COMPLETADA]
+      required:
+        - paqueteID
+        - necesidadID
+        - fecha
+        - estado
+
+    GestionDonacionDTO:
+      type: object
+      properties:
+        depositoID:
+          type: string
+        donacionID:
+          type: string
+        productoID:
+          type: string
+        cantidad:
+          type: number
+      required:
+        - depositoID
+        - productoID
+        - cantidad
+
+    PaqueteDTO:
+      type: object
+      properties:
+        id:
+          type: string
+        donacionID:
+          type: string
+        producto:
+          type: string
+        cantidad:
+          type: integer  
+      required:
+        - id 
+    DepositoDTO:
+      type: object
+      properties:
+        id:
+          type: string
+        algoritmo:
+          type: string
+          enum: [PRIORIDAD_POR_SCORE, SUB_ATENDIDOS]
+        nombre:
+          type: string
+        direccion:
+          type: string
+        capacidadMaxima:
+          type: integer
+        stockActual:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaqueteDTO'
+servers:
+  # Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://virtserver.swaggerhub.com/utn-19f/API_LOGISTICA/1.0.0
