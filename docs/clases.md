@@ -7,10 +7,14 @@ classDiagram
         -nombre: String
         -direccion: String
         -capacidadMaxima: Integer
+        -algoritmo: TipoAlgoritmoEnum
+        -algoritmoObj: Algoritmo
         -stockActual: List~Paquete~
         -idSecuencial: AtomicLong
         +verificarCantidad(Integer) void
         +agregarPaquete(Paquete) Paquete
+        +getAlgoritmoObj() Algoritmo
+        +setAlgoritmoObj(Algoritmo) void
     }
 
     class Paquete {
@@ -20,13 +24,14 @@ classDiagram
         -cantidad: Integer
     }
 
-    class NecesidadDeEntidad {
+    class NecesidadMaterial {
         -id: String
         -entidadID: String
         -nivelDeUrgencia: Integer
         -descripcion: String
         -cantidadObjetivo: Integer
-        -productoSolicitado: String
+        -productoSolicitadoID: String
+        -tipo: TipoNecesidadMaterialEnum
     }
     
     class Asignacion {
@@ -34,32 +39,47 @@ classDiagram
         -paqueteID: String
         -necesidadID: String
         -fecha: LocalDateTime
-        -estado: EstadoAsignacionEnum
+        -estado: EstadoAsginacionEnum
     }
 
-    class EstadoAsignacionEnum {
+    class EstadoAsginacionEnum {
         <<enum>>
         ASIGNADA
         COMPLETADA
     }
 
-    
+    class TipoNecesidadMaterialEnum {
+        <<enum>>
+        EXTRAORDINARIA
+        RECURRENTE
+    }
+
     class Algoritmo {
         <<interface>>
-        +correr(Paquete, List~NecesidadDeEntidad~) NecesidadDeEntidad
+        +correr(Paquete, List~NecesidadMaterial~) NecesidadMaterial
     }
 
     class PrioridadASubAtendidos {
-        +correr(Paquete, List~NecesidadDeEntidad~) NecesidadDeEntidad
+        +correr(Paquete, List~NecesidadMaterial~) NecesidadMaterial
     }
 
-    Deposito --> Paquete 
+    class PrioridadPorScore {
+        -calcularScore(Paquete, NecesidadMaterial) int
+        +correr(Paquete, List~NecesidadMaterial~) NecesidadMaterial
+    }
 
-    Asignacion --> Paquete
-    Asignacion --> NecesidadDeEntidad 
-    Asignacion --> EstadoAsignacionEnum 
+    Deposito --> Paquete : stockActual
+    Deposito --> Algoritmo : algoritmoObj
+    
+    Asignacion --> EstadoAsginacionEnum : estado
+    Asignacion -.->|referencia| Paquete : paqueteID
+    Asignacion -.->|referencia| NecesidadMaterial : necesidadID
 
-    Algoritmo ..> Paquete
-    Algoritmo ..> NecesidadDeEntidad 
-    PrioridadASubAtendidos --|> Algoritmo
+    Algoritmo ..> Paquete : usa
+    Algoritmo ..> NecesidadMaterial : usa
+    
+    PrioridadASubAtendidos --|> Algoritmo : implementa
+    PrioridadPorScore --|> Algoritmo : implementa
+    
+    NecesidadMaterial --> TipoNecesidadMaterialEnum : tipo
 ```
