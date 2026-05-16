@@ -16,8 +16,8 @@ subgraph sistema["📦 Sistema de Logística"]
     end
 end
 
-Cliente -->|HTTP Requests| Controller
-Controller -->|Interactúa| Fachada
-Fachada -.->|Consulta/Actualiza| FachadaDon
-Fachada -.->|Consulta/Actualiza| FachadaDE
+Cliente -->|HTTPS Requests| Controller
+Controller -->Fachada
+Fachada -.->FachadaDon
+Fachada -.->FachadaDE
 ```
