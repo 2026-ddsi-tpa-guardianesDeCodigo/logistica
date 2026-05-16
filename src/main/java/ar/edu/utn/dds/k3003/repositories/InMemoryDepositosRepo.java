@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
+
+import ar.edu.utn.dds.k3003.model.Paquete;
 import lombok.val;
 
 public class InMemoryDepositosRepo implements DepositosRepository {
@@ -23,11 +25,15 @@ public class InMemoryDepositosRepo implements DepositosRepository {
 
   @Override
   public Deposito save(Deposito deposito) {
-    Deposito depositoConID = deposito;
-    depositoConID.setId(String.valueOf(idSecuencial.getAndIncrement()));
-
-    this.depositos.add(depositoConID);
-    return this.findById(depositoConID.getId()).get();
+    if (deposito.getId() == null) {
+      deposito.setId(String.valueOf(idSecuencial.getAndIncrement()));
+      this.depositos.add(deposito);
+    } else {
+      if (!this.depositos.contains(deposito)) {
+        this.depositos.add(deposito);
+      }
+    }
+    return deposito;
   }
 
   @Override
@@ -36,4 +42,10 @@ public class InMemoryDepositosRepo implements DepositosRepository {
     this.depositos.remove(deposito.get());
     return deposito.get();
   }
+
+  @Override
+  public List<Deposito> findAll() {
+    return new ArrayList<>(depositos);
+  }
+
 }

@@ -79,9 +79,11 @@ public class Deposito {
   }
 
   public Deposito(
+      String id,
       String nombre,
       String direccion,
       Integer capacidadMaxima) {
+    this.id = id;
     this.nombre = nombre;
     this.direccion = direccion;
     this.capacidadMaxima = capacidadMaxima;

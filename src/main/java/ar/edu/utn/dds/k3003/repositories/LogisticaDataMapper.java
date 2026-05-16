@@ -28,6 +28,7 @@ public class LogisticaDataMapper {
 
   public Deposito toDeposito(DepositoDTO depositoDTO) {
     var deposito = new Deposito(
+        depositoDTO.id(),
         depositoDTO.nombre(),
         depositoDTO.direccion(),
         depositoDTO.capacidadMaxima()

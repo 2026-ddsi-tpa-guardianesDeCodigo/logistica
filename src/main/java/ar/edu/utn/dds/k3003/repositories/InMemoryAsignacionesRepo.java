@@ -32,11 +32,11 @@ public class InMemoryAsignacionesRepo implements AsignacionesRepository{
 
     @Override
     public Asignacion save(Asignacion asignacion) {
-        Asignacion asignacionConID = asignacion;
-        asignacion.setId(String.valueOf(idSecuencial.getAndIncrement()));
-
-        this.asignaciones.add(asignacionConID);
-        return this.findById(asignacionConID.getId()).get();
+        if (asignacion.getId() == null) {
+            asignacion.setId(String.valueOf(idSecuencial.getAndIncrement()));
+        }
+        this.asignaciones.add(asignacion);
+        return this.findById(asignacion.getId()).get();
     }
 
     @Override

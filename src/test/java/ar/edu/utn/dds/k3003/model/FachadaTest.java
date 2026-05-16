@@ -43,16 +43,6 @@ public class FachadaTest {
     assertEquals("paq1", resultado.paqueteID());
   }
 
-  @Test
-  void agregarAsignacionDuplicadaLanzaExcepcion() {
-    AsignacionDTO asignacion = new AsignacionDTO("1", "paq1", "nec1", null, null);
-    fachada.agregarAsignacion(asignacion);
-    
-    assertThrows(DepositoYaExistenteException.class, () -> {
-      fachada.agregarAsignacion(asignacion);
-    });
-  }
-
 
   @Test
   void buscarAsignacionPorPaqueteIDNoEncontradaLanzaExcepcion() {

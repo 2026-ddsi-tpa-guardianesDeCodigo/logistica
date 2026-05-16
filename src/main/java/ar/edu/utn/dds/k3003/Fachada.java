@@ -10,6 +10,7 @@ import ar.edu.utn.dds.k3003.exceptions.*;
 import ar.edu.utn.dds.k3003.model.*;
 import ar.edu.utn.dds.k3003.repositories.*;
 import lombok.val;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import static ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum.AC
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.ASIGNADA;
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.COMPLETADA;
 
+@Service
 public class Fachada implements FachadaLogistica {
 
   private DepositosRepository depositosRepository;
@@ -39,7 +41,11 @@ public class Fachada implements FachadaLogistica {
   @Override
   public DepositoDTO agregarDeposito (DepositoDTO depositoDTO){
 
-    if(depositosRepository.findById(depositoDTO.id()).isPresent()){
+    if(depositoDTO == null){
+      throw new RuntimeException("El DTO no puede ser nulo");
+    }
+
+    if(depositoDTO.id() != null && depositosRepository.findById(depositoDTO.id()).isPresent()){
       throw new DepositoYaExistenteException("Ya existe un deposito con ese ID");
     }
 
@@ -87,11 +93,7 @@ public class Fachada implements FachadaLogistica {
     deposito.agregarPaquete(paquete);
     depositosRepository.save(deposito);
 
-
-    val asignacionDTO = this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paquete), necesidadesMaterialesDTO );
-
-    asignacionesActivasRepository.save(logisticaDataMapper.toAsignacion(asignacionDTO));
-    historialAsignacionesRepository.save(logisticaDataMapper.toAsignacion(asignacionDTO));
+    this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paquete), necesidadesMaterialesDTO );
 
     return logisticaDataMapper.toDepositoDTO(deposito);
   }
@@ -128,19 +130,21 @@ public class Fachada implements FachadaLogistica {
 
     val necesidadElegida = algoritmoDelDeposito.correr(paquete, necesidadesDeEntidades);
 
-    val necesidadElegidaDTO = necesidadesDTO.stream()
-            .filter(n -> n.id().equals(necesidadElegida.getId()))
-            .findFirst()
-            .orElseThrow();
+    int indice = necesidadesDeEntidades.indexOf(necesidadElegida);
+    val necesidadElegidaDTO = necesidadesDTO.get(indice);
+
 
     if (necesidadElegidaDTO.tipo() == TipoNecesidadMaterialEnum.RECURRENTE
             && paquete.getCantidad() < necesidadElegidaDTO.cantidadObjetivo()) {
       throw new DonacionParcialNoPermitida("Las necesidades recurrentes no admiten donaciones parciales");
     }
 
-    val asignacion = new Asignacion(LocalDateTime.now().toString(), paquete.getId(), necesidadElegida.getId(), LocalDateTime.now(), ASIGNADA);
+    val asignacion = new Asignacion(null, paquete.getId(), necesidadElegidaDTO.id(), LocalDateTime.now(), ASIGNADA);
 
-    return logisticaDataMapper.toAsignacionDTO(asignacion);
+    val asignacionGuardada = asignacionesActivasRepository.save(asignacion);
+    historialAsignacionesRepository.save(new Asignacion(asignacionGuardada.getId(), paquete.getId(), necesidadElegida.getId(), LocalDateTime.now(), ASIGNADA));
+
+    return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
   }
 
   @Override
@@ -197,6 +201,23 @@ public class Fachada implements FachadaLogistica {
             orElseThrow(() -> new AsignacionNoEncontrada("No existe una asignacion con ese ID")) ;
 
     return logisticaDataMapper.toAsignacionDTO(asignacion);
+  }
+
+  public PaqueteDTO buscarPaquetePorID(String paqueteID) {
+    return depositosRepository.findAll().stream()
+            .flatMap(deposito -> deposito.getStockActual().stream())
+            .filter(paquete -> paquete.getId().equals(paqueteID))
+            .map(logisticaDataMapper::toPaqueteDTO)
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("No existe un paquete con ese ID"));
+  }
+
+  public List<DepositoDTO> obtenerTodosLosDepositos(){
+
+    return depositosRepository.findAll().stream()
+            .map(logisticaDataMapper::toDepositoDTO)
+            .toList();
+
   }
 
 }
