@@ -1,88 +1,39 @@
 package ar.edu.utn.dds.k3003.model;
 
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.CantidadDeProductoInvalida;
 import ar.edu.utn.dds.k3003.exceptions.DepositoLleno;
-import ar.edu.utn.dds.k3003.repositories.LogisticaDataMapper;
-
+import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
+@Entity
+@Table(name = "depositos")
 public class Deposito {
 
+  @Id
   private String id;
+
+  @Enumerated(EnumType.STRING)
   private TipoAlgoritmoEnum algoritmo;
+
+  @Transient
   private Algoritmo algoritmoObj = null;
+
   private String nombre;
   private String direccion;
   private Integer capacidadMaxima;
-  private List<Paquete> stockActual;
+
+  @OneToMany(mappedBy = "deposito", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
+  private List<Paquete> stockActual = new ArrayList<>();
+
+  @Transient
   private AtomicLong idSecuencial = new AtomicLong(1);
 
+  public Deposito() {}
 
-  public String getId() {
-    return id;
-  }
-
-  public void setId(String id) {
-    this.id = id;
-  }
-
-  public TipoAlgoritmoEnum getAlgoritmo() {
-    return algoritmo;
-  }
-
-  public void setAlgoritmo(TipoAlgoritmoEnum algoritmo) {
-    this.algoritmo = algoritmo;
-  }
-
-  public Algoritmo getAlgoritmoObj() {
-    return algoritmoObj;
-  }
-
-  public void setAlgoritmoObj(Algoritmo algoritmoObj) {
-    this.algoritmoObj = algoritmoObj;
-  }
-
-  public String getNombre() {
-    return nombre;
-  }
-
-  public void setNombre(String nombre) {
-    this.nombre = nombre;
-  }
-
-  public String getDireccion() {
-    return direccion;
-  }
-
-  public void setDireccion(String direccion) {
-    this.direccion = direccion;
-  }
-
-  public void setCapacidadMaxima(Integer capacidadMaxima) {
-    this.capacidadMaxima = capacidadMaxima;
-  }
-
-  public void setStockActual(List<Paquete> stockActual) {
-    this.stockActual = stockActual;
-  }
-
-  public Integer getCapacidadMaxima() {
-    return capacidadMaxima;
-  }
-
-  public List<Paquete> getStockActual() {
-    return stockActual;
-  }
-
-  public Deposito(
-      String id,
-      String nombre,
-      String direccion,
-      Integer capacidadMaxima) {
+  public Deposito(String id, String nombre, String direccion, Integer capacidadMaxima) {
     this.id = id;
     this.nombre = nombre;
     this.direccion = direccion;
@@ -90,8 +41,23 @@ public class Deposito {
     this.stockActual = new ArrayList<>();
   }
 
-  public void verificarCantidad(Integer cantidad){
-    if (cantidad == null || cantidad <= 0){
+  public String getId() { return id; }
+  public void setId(String id) { this.id = id; }
+  public TipoAlgoritmoEnum getAlgoritmo() { return algoritmo; }
+  public void setAlgoritmo(TipoAlgoritmoEnum algoritmo) { this.algoritmo = algoritmo; }
+  public Algoritmo getAlgoritmoObj() { return algoritmoObj; }
+  public void setAlgoritmoObj(Algoritmo algoritmoObj) { this.algoritmoObj = algoritmoObj; }
+  public String getNombre() { return nombre; }
+  public void setNombre(String nombre) { this.nombre = nombre; }
+  public String getDireccion() { return direccion; }
+  public void setDireccion(String direccion) { this.direccion = direccion; }
+  public Integer getCapacidadMaxima() { return capacidadMaxima; }
+  public void setCapacidadMaxima(Integer capacidadMaxima) { this.capacidadMaxima = capacidadMaxima; }
+  public List<Paquete> getStockActual() { return stockActual; }
+  public void setStockActual(List<Paquete> stockActual) { this.stockActual = stockActual; }
+
+  public void verificarCantidad(Integer cantidad) {
+    if (cantidad == null || cantidad <= 0) {
       throw new CantidadDeProductoInvalida("La cantidad de productos debe ser mayor o igual a 1");
     }
   }
