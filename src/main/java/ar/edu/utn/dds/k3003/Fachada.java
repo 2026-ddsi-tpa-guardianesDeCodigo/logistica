@@ -176,4 +176,15 @@ public class Fachada implements FachadaLogistica {
             .map(logisticaDataMapper::toDepositoDTO)
             .toList();
   }
+
+  public List<AsignacionDTO> obtenerTodasLasAsignaciones() {
+    return asignacionesActivasRepository.findAll().stream()
+            .map(logisticaDataMapper::toAsignacionDTO)
+            .toList();
+  }
+
+  public void limpiarBaseDeDatos() {
+    asignacionesActivasRepository.deleteAll();
+    depositosRepository.deleteAll();
+  }
 }

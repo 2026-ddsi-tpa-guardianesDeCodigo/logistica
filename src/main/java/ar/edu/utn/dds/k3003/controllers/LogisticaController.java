@@ -66,4 +66,15 @@ public class LogisticaController {
     return ResponseEntity.status(HttpStatus.CREATED).build();
   }
 
+  @GetMapping("/asignaciones")
+  public ResponseEntity<List<AsignacionDTO>> getAllAsignaciones() {
+    return ResponseEntity.ok(fachada.obtenerTodasLasAsignaciones());
+  }
+
+  @DeleteMapping("/admin/reset")
+  public ResponseEntity<String> resetDb() {
+    fachada.limpiarBaseDeDatos();
+    return ResponseEntity.ok("Base de datos limpiada");
+  }
+
 }
