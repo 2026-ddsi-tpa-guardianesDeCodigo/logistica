@@ -6,6 +6,8 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonaciones;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonadoresYEntidades;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaLogistica;
+import ar.edu.utn.dds.k3003.clients.DonacionesClient;
+import ar.edu.utn.dds.k3003.clients.DonadoresYEntidadesClient;
 import ar.edu.utn.dds.k3003.exceptions.*;
 import ar.edu.utn.dds.k3003.model.*;
 import ar.edu.utn.dds.k3003.repositories.*;
@@ -27,15 +29,22 @@ public class Fachada implements FachadaLogistica {
   private final JpaDepositosRepo depositosRepository;
   private final JpaAsignacionesRepo asignacionesActivasRepository;
   private final JpaAsignacionesRepo historialAsignacionesRepository;
+  private final DonacionesClient donacionesClient;
+  private final DonadoresYEntidadesClient donadoresYEntidadesClient;
   private LogisticaDataMapper logisticaDataMapper = new LogisticaDataMapper();
   private FachadaDonaciones fachadaDonaciones;
   private FachadaDonadoresYEntidades fachadaDonadoresYEntidades;
 
   @Autowired
-  public Fachada(JpaDepositosRepo depositosRepository, JpaAsignacionesRepo asignacionesRepo) {
+  public Fachada(JpaDepositosRepo depositosRepository,
+                 JpaAsignacionesRepo asignacionesRepo,
+                 DonacionesClient donacionesClient,
+                 DonadoresYEntidadesClient donadoresYEntidadesClient) {
     this.depositosRepository = depositosRepository;
     this.asignacionesActivasRepository = asignacionesRepo;
     this.historialAsignacionesRepository = asignacionesRepo;
+    this.donacionesClient = donacionesClient;
+    this.donadoresYEntidadesClient = donadoresYEntidadesClient;
   }
 
   @Override
@@ -70,7 +79,7 @@ public class Fachada implements FachadaLogistica {
     val depositoDTO = buscarDepositoPorID(depositoID);
     val deposito = logisticaDataMapper.toDeposito(depositoDTO);
     deposito.verificarCantidad(cantidad);
-    val necesidadesMaterialesDTO = fachadaDonadoresYEntidades.obtenerNecesidadesInsatisfechasDe(productoID);
+    val necesidadesMaterialesDTO = donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe(productoID);
     if (necesidadesMaterialesDTO.isEmpty()) {
       throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
     }
@@ -121,8 +130,8 @@ public class Fachada implements FachadaLogistica {
   @Override
   public void reportarEntrega(PaqueteDTO paqueteDTO) {
     AsignacionDTO asignacionDTO = this.buscarAsignacionPorPaqueteID(paqueteDTO.id());
-    fachadaDonadoresYEntidades.satisfacerNecesidad(asignacionDTO.necesidadID(), paqueteDTO.cantidad());
-    fachadaDonaciones.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
+    donadoresYEntidadesClient.satisfacerNecesidad(asignacionDTO.necesidadID(), paqueteDTO.cantidad());
+    donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
     asignacionesActivasRepository.updateEstado(asignacionDTO.id(), COMPLETADA);
     var asignacionHistorial = new Asignacion(asignacionDTO.id(), paqueteDTO.id(), asignacionDTO.necesidadID(), asignacionDTO.fecha(), COMPLETADA);
     historialAsignacionesRepository.save(asignacionHistorial);
@@ -130,12 +139,10 @@ public class Fachada implements FachadaLogistica {
 
   @Override
   public void setFachadaDonadoresYEntidades(FachadaDonadoresYEntidades fachadaDonadoresYEntidades) {
-    this.fachadaDonadoresYEntidades = fachadaDonadoresYEntidades;
   }
 
   @Override
   public void setFachadaDonaciones(FachadaDonaciones fachadaDonaciones) {
-    this.fachadaDonaciones = fachadaDonaciones;
   }
 
   public AsignacionDTO agregarAsignacion(AsignacionDTO asignacionDTO) {
