@@ -8,6 +8,7 @@ import ar.edu.utn.dds.k3003.model.Asignacion;
 import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.model.NecesidadMaterial;
 import ar.edu.utn.dds.k3003.model.Paquete;
+import lombok.val;
 
 public class LogisticaDataMapper {
 
@@ -27,12 +28,16 @@ public class LogisticaDataMapper {
   }
 
   public Deposito toDeposito(DepositoDTO depositoDTO) {
-    return new Deposito(
+    var deposito = new Deposito(
         depositoDTO.id(),
         depositoDTO.nombre(),
         depositoDTO.direccion(),
         depositoDTO.capacidadMaxima()
     );
+
+    deposito.setAlgoritmo(depositoDTO.algoritmo());
+
+    return deposito;
   }
   public PaqueteDTO toPaqueteDTO(Paquete paquete){
     return new PaqueteDTO(
