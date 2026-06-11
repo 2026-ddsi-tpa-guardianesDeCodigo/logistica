@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.UUID;
 
 import static ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum.ACEPTADA;
 import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.ASIGNADA;
@@ -52,7 +51,6 @@ public class LogisticaService {
         this.asignacionesRepository = asignacionesRepo;
         this.donacionesClient = donacionesClient;
         this.donadoresYEntidadesClient = donadoresYEntidadesClient;
-
 
         this.depositosCreados = Counter.builder("logistica.depositos.creados")
                 .description("Cantidad de depósitos creados")
@@ -158,7 +156,6 @@ public class LogisticaService {
         depositosRepository.save(deposito);
     }
 
-<<<<<<< HEAD
     public AsignacionDTO ejecutarMatchmaking(String depositoID, PaqueteDTO paqueteDTO, List<NecesidadMaterialDTO> necesidadesDTO) {
         return tiempoMatchmaking.record(() -> {
             Deposito deposito = depositosRepository.findById(depositoID)
@@ -187,64 +184,6 @@ public class LogisticaService {
             matchmakingsEjecutados.increment();
             return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
         });
-=======
-    public AsignacionDTO ejecutarMatchmaking(
-            String depositoID,
-            PaqueteDTO paqueteDTO,
-            List<NecesidadMaterialDTO> necesidadesDTO
-    ) {
-        Deposito deposito = depositosRepository.findById(depositoID)
-                .orElseThrow(() -> new DepositoNoEncontradoException("No existe un deposito con ese ID"));
-
-        Algoritmo algoritmoDelDeposito;
-
-        if (deposito.getAlgoritmo() == null) {
-            throw new AlgoritmoNoConfiguradoException("El depósito no tiene algoritmo configurado");
-        }
-
-        switch (deposito.getAlgoritmo()) {
-            case PRIORIDAD_POR_SCORE -> algoritmoDelDeposito = new PrioridadPorScore();
-            case SUB_ATENDIDOS -> algoritmoDelDeposito = new PrioridadASubAtendidos();
-            default -> throw new AlgoritmoNoConfiguradoException("El depósito no tiene algoritmo configurado");
-        }
-
-        List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDTO.stream()
-                .map(logisticaDataMapper::toNecesidadDeEntidad)
-                .toList();
-
-        val paquete = logisticaDataMapper.toPaquete(paqueteDTO);
-        val necesidadElegida = algoritmoDelDeposito.correr(paquete, necesidadesDeEntidades);
-
-        int indice = necesidadesDeEntidades.indexOf(necesidadElegida);
-        val necesidadElegidaDTO = necesidadesDTO.get(indice);
-
-        if (necesidadElegidaDTO.tipo() == TipoNecesidadMaterialEnum.RECURRENTE
-                && paquete.getCantidad() < necesidadElegidaDTO.cantidadObjetivo()) {
-            throw new DonacionParcialNoPermitida("Las necesidades recurrentes no admiten donaciones parciales");
-        }
-
-        val asignacion = new Asignacion(
-                UUID.randomUUID().toString(),
-                paquete.getId(),
-                necesidadElegidaDTO.id(),
-                LocalDateTime.now(),
-                ASIGNADA
-        );
-
-        val asignacionGuardada = asignacionesActivasRepository.save(asignacion);
-
-        historialAsignacionesRepository.save(
-                new Asignacion(
-                        asignacionGuardada.getId(),
-                        paquete.getId(),
-                        necesidadElegida.getId(),
-                        LocalDateTime.now(),
-                        ASIGNADA
-                )
-        );
-
-        return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
->>>>>>> 4a29d62ac740d8d93de3824087d43ad053fabd17
     }
 
     public void reportarEntrega(PaqueteDTO paqueteDTO) {
