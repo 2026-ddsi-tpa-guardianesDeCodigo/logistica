@@ -1,6 +1,7 @@
 package ar.edu.utn.dds.k3003.clients;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -9,9 +10,9 @@ public class DonacionesClient {
 
     private final RestClient restClient;
 
-    public DonacionesClient() {
+    public DonacionesClient(@Value("${donaciones.url}") String baseUrl){
         this.restClient = RestClient.builder()
-                .baseUrl("http://localhost:8082")
+                .baseUrl(baseUrl)
                 .build();
     }
 

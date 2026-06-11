@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class Asignacion {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     private String paqueteID;

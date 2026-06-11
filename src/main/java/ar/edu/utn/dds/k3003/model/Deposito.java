@@ -6,7 +6,7 @@ import ar.edu.utn.dds.k3003.exceptions.DepositoLleno;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.UUID;
 
 @Entity
 @Table(name = "depositos")
@@ -28,17 +28,26 @@ public class Deposito {
   @OneToMany(mappedBy = "deposito", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
   private List<Paquete> stockActual = new ArrayList<>();
 
-  @Transient
-  private AtomicLong idSecuencial = new AtomicLong(1);
-
-  public Deposito() {}
+  public Deposito() {
+    this.id = UUID.randomUUID().toString();
+  }
 
   public Deposito(String id, String nombre, String direccion, Integer capacidadMaxima) {
-    this.id = id;
+    this.id = (id != null) ? id : UUID.randomUUID().toString();
     this.nombre = nombre;
     this.direccion = direccion;
     this.capacidadMaxima = capacidadMaxima;
     this.stockActual = new ArrayList<>();
+  }
+
+  @PostLoad
+  public void reconstruirAlgoritmo() {
+    if (algoritmo != null) {
+      this.algoritmoObj = switch (algoritmo) {
+        case SUB_ATENDIDOS -> new PrioridadASubAtendidos();
+        case PRIORIDAD_POR_SCORE -> new PrioridadPorScore();
+      };
+    }
   }
 
   public String getId() { return id; }
@@ -62,15 +71,13 @@ public class Deposito {
     }
   }
 
-  public Paquete agregarPaquete (Paquete paquete){
-    if(capacidadMaxima == stockActual.toArray().length){
+  public Paquete agregarPaquete(Paquete paquete) {
+    if (capacidadMaxima != null && capacidadMaxima == stockActual.size()) {
       throw new DepositoLleno("El deposito esta lleno");
     }
-
-    paquete.setId(String.valueOf(idSecuencial.getAndIncrement()));
-
+    paquete.setId(UUID.randomUUID().toString());
+    paquete.setDeposito(this);
     stockActual.add(paquete);
-
     return paquete;
   }
 }

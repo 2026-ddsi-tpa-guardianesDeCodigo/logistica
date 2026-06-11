@@ -27,14 +27,12 @@ public class LogisticaDataMapper {
   }
 
   public Deposito toDeposito(DepositoDTO depositoDTO) {
-    var deposito = new Deposito(
+    return new Deposito(
         depositoDTO.id(),
         depositoDTO.nombre(),
         depositoDTO.direccion(),
         depositoDTO.capacidadMaxima()
     );
-    deposito.setId(depositoDTO.id());
-    return deposito;
   }
   public PaqueteDTO toPaqueteDTO(Paquete paquete){
     return new PaqueteDTO(

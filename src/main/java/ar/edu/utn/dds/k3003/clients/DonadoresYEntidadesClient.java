@@ -1,6 +1,7 @@
 package ar.edu.utn.dds.k3003.clients;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -11,9 +12,9 @@ public class DonadoresYEntidadesClient {
 
     private final RestClient restClient;
 
-    public DonadoresYEntidadesClient() {
+    public DonadoresYEntidadesClient(@Value("${donadores.url}") String baseUrl) {
         this.restClient = RestClient.builder()
-                .baseUrl("http://localhost:8081")
+                .baseUrl("baseUrl")
                 .build();
     }
 
