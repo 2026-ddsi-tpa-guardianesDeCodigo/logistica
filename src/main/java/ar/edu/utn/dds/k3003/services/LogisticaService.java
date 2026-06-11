@@ -98,6 +98,10 @@ public class LogisticaService {
         if (depositoDTO.id() != null && depositosRepository.findById(depositoDTO.id()).isPresent())
             throw new DepositoYaExistenteException("Ya existe un deposito con ese ID");
         val nuevoDeposito = logisticaDataMapper.toDeposito(depositoDTO);
+        if (depositoDTO.algoritmo() != null) {           // ← NUEVO
+            nuevoDeposito.setAlgoritmo(depositoDTO.algoritmo());
+            nuevoDeposito.reconstruirAlgoritmo();         // ← NUEVO
+        }
         val depositoGuardado = depositosRepository.save(nuevoDeposito);
         depositosCreados.increment();
         return logisticaDataMapper.toDepositoDTO(depositoGuardado);
