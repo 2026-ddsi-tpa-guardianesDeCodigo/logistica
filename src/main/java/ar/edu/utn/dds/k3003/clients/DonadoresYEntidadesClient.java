@@ -14,7 +14,7 @@ public class DonadoresYEntidadesClient {
 
     public DonadoresYEntidadesClient(@Value("${donadores.url}") String baseUrl) {
         this.restClient = RestClient.builder()
-                .baseUrl("baseUrl")
+                .baseUrl(baseUrl)
                 .build();
     }
 

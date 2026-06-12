@@ -139,6 +139,7 @@ public class LogisticaService {
         }
         val paquete = new Paquete(donacionID, productoID, cantidad);
         deposito.agregarPaquete(paquete);
+
         depositosRepository.save(deposito);
         this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paquete), necesidadesMaterialesDTO);
         donacionesGestionadas.increment();
