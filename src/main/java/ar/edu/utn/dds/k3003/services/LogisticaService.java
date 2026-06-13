@@ -30,7 +30,7 @@ public class LogisticaService {
     private final DonadoresYEntidadesClient donadoresYEntidadesClient;
     private final LogisticaDataMapper logisticaDataMapper = new LogisticaDataMapper();
 
-    // --- Métricas ---
+    // --- MÃ©tricas ---
     private final Counter depositosCreados;
     private final Counter depositosEliminados;
     private final Counter donacionesGestionadas;
@@ -50,12 +50,12 @@ public class LogisticaService {
         this.donadoresYEntidadesClient = donadoresYEntidadesClient;
 
         this.depositosCreados = Counter.builder("logistica.depositos.creados")
-                .description("Cantidad de depósitos creados")
+                .description("Cantidad de depÃ³sitos creados")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
         this.depositosEliminados = Counter.builder("logistica.depositos.eliminados")
-                .description("Cantidad de depósitos eliminados")
+                .description("Cantidad de depÃ³sitos eliminados")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
@@ -80,12 +80,12 @@ public class LogisticaService {
                 .register(meterRegistry);
 
         this.erroresNegocio = Counter.builder("logistica.errores.negocio")
-                .description("Errores de reglas de negocio (algoritmo no configurado, donación parcial, etc)")
+                .description("Errores de reglas de negocio (algoritmo no configurado, donaciÃ³n parcial, etc)")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
         this.tiempoMatchmaking = Timer.builder("logistica.matchmaking.tiempo")
-                .description("Tiempo de ejecución del matchmaking")
+                .description("Tiempo de ejecuciÃ³n del matchmaking")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
     }
@@ -132,21 +132,27 @@ public class LogisticaService {
                     return new DepositoNoEncontradoException("No existe un deposito con ese ID");
                 });
         deposito.verificarCantidad(cantidad);
+
         val necesidadesMaterialesDTO = donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe(productoID);
         if (necesidadesMaterialesDTO.isEmpty()) {
             erroresNegocio.increment();
             throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
         }
+
+        // 1. Crear el paquete en memoria (sin ID aÃºn, sin persistir)
         val paquete = new Paquete(donacionID, productoID, cantidad);
+
+        // 2. Ejecutar matchmaking ANTES de persistir el paquete.
+        //    AsÃ­ cuando ejecutarMatchmaking llama a buscarDepositoPorID,
+        //    JPA trae el depÃ³sito SIN este paquete â†’ no hay duplicaciÃ³n.
+        this.ejecutarMatchmaking(depositoID, logisticaDataMapper.toPaqueteDTO(paquete), necesidadesMaterialesDTO);
+
+        // 3. ReciÃ©n ahora agregar y persistir el paquete (una sola vez)
         deposito.agregarPaquete(paquete);
         val depositoGuardado = logisticaRepository.guardarDeposito(deposito);
-        val paqueteGuardado = depositoGuardado.getStockActual().stream()
-                .filter(p -> p.getDonacionID().equals(donacionID))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Error al recuperar el paquete guardado"));
-        this.ejecutarMatchmaking(deposito.getId(), logisticaDataMapper.toPaqueteDTO(paqueteGuardado), necesidadesMaterialesDTO);
+
         donacionesGestionadas.increment();
-        return logisticaDataMapper.toDepositoDTO(deposito);
+        return logisticaDataMapper.toDepositoDTO(depositoGuardado);
     }
 
     public void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum tipoAlgoritmo) {
@@ -174,7 +180,7 @@ public class LogisticaService {
             Algoritmo algoritmoDelDeposito = deposito.getAlgoritmoObj();
             if (algoritmoDelDeposito == null) {
                 erroresNegocio.increment();
-                throw new AlgoritmoNoConfiguradoException("El depósito no tiene algoritmo configurado");
+                throw new AlgoritmoNoConfiguradoException("El depÃ³sito no tiene algoritmo configurado");
             }
             List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDTO.stream()
                     .map(logisticaDataMapper::toNecesidadDeEntidad).toList();
@@ -203,7 +209,7 @@ public class LogisticaService {
     }
 
     public AsignacionDTO agregarAsignacion(AsignacionDTO asignacionDTO) {
-        if (asignacionDTO.id() != null && logisticaRepository.buscarAsignacionPorID(asignacionDTO.id()).isPresent()) // ← antes: asignacionesRepository.findById
+        if (asignacionDTO.id() != null && logisticaRepository.buscarAsignacionPorID(asignacionDTO.id()).isPresent())
             throw new AsignacionYaExistenteException("Ya existe una asignacion con ese ID");
         val nuevaAsignacion = logisticaDataMapper.toAsignacion(asignacionDTO);
         val asignacionGuardada = logisticaRepository.guardarAsignacion(nuevaAsignacion);
@@ -220,7 +226,6 @@ public class LogisticaService {
         depositosEliminados.increment();
         return logisticaDataMapper.toDepositoDTO(deposito);
     }
-
 
     public AsignacionDTO buscarAsignacionPorID(String asignacionID) {
         val asignacion = logisticaRepository.buscarAsignacionPorID(asignacionID)
