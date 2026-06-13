@@ -1,89 +1,225 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
+  title: Logística API
+  description: API del módulo de logística para gestión de depósitos, paquetes, asignaciones y matchmaking de donaciones.
   version: 1.0.0
-  title: API Logística - 2026 - DDSI - TPA
-  description: API del componente de Logística
+
+tags:
+  - name: Depósitos
+    description: Gestión de depósitos de almacenamiento
+  - name: Asignaciones
+    description: Consulta de asignaciones entre paquetes y necesidades
+  - name: Entregas
+    description: Registro de entregas de paquetes
+  - name: Administración
+    description: Operaciones administrativas
 
 paths:
-  # ---------------- DEPOSITOS ----------------
-  /depositos:
-    post:
-      summary: Crear un deposito
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DepositoRequest'
-      responses:
-        '201':
-          description: Deposito creado correctamente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DepositoDTO'
 
+  /depositos:
     get:
-      summary: Obtener todos los depositos
+      tags: [Depósitos]
+      summary: Obtener todos los depósitos
+      description: Retorna la lista completa de depósitos registrados en el sistema.
       responses:
         '200':
-          description: Lista de depositos
+          description: Lista de depósitos obtenida exitosamente
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/DepositoResponse'
-        '404':
-          description: Depositos no encontrados
+                  $ref: '#/components/schemas/DepositoDTO'
+
+    post:
+      tags: [Depósitos]
+      summary: Crear un nuevo depósito
+      description: Registra un nuevo depósito. La capacidad máxima es obligatoria. Si se provee un ID y ya existe, retorna 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepositoDTO'
+            example:
+              nombre: "Depósito Central"
+              direccion: "Av. Corrientes 1234"
+              capacidadMaxima: 100
+      responses:
+        '201':
+          description: Depósito creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositoDTO'
+        '400':
+          description: Capacidad máxima no especificada u otro error de validación
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "La capacidad maximma es obligatoria"
+        '409':
+          description: Ya existe un depósito con ese ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "Ya existe un deposito con ese ID"
 
   /depositos/{id}:
     get:
-      summary: Obtener deposito por ID
+      tags: [Depósitos]
+      summary: Obtener depósito por ID
+      description: Retorna los datos de un depósito específico, incluyendo su stock actual.
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/PathId'
       responses:
         '200':
-          description: Deposito encontrado
+          description: Depósito encontrado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DepositoResponse'
+                $ref: '#/components/schemas/DepositoDTO'
         '404':
-          description: Deposito no encontrado
+          description: Depósito no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "No existe un deposito con ese ID"
 
     delete:
-      summary: Eliminar un deposito
+      tags: [Depósitos]
+      summary: Eliminar depósito por ID
+      description: Elimina un depósito existente y retorna sus datos antes de la eliminación.
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/PathId'
       responses:
         '200':
-          description: Deposito eliminado correctamente
+          description: Depósito eliminado exitosamente. Retorna el depósito eliminado.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DepositoResponse'
+                $ref: '#/components/schemas/DepositoDTO'
         '404':
-          description: Deposito no encontrado
+          description: Depósito no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "No existe un deposito con ese ID"
 
-  # ---------------- ASIGNACIONES ----------------
+  /depositos/{id}/algoritmo:
+    patch:
+      tags: [Depósitos]
+      summary: Configurar algoritmo de matchmaking
+      description: |
+        Asigna el algoritmo de matchmaking a un depósito. Los valores posibles son:
+        - `SUB_ATENDIDOS`: prioriza entidades sub-atendidas
+        - `PRIORIDAD_POR_SCORE`: prioriza según score de la entidad
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TipoAlgoritmoEnum'
+            example: "SUB_ATENDIDOS"
+      responses:
+        '200':
+          description: Algoritmo configurado exitosamente
+        '404':
+          description: Depósito no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "No existe un deposito con ese ID"
+
+  /depositos/{id}/donacion:
+    post:
+      tags: [Depósitos]
+      summary: Gestionar una donación en un depósito
+      description: |
+        Registra una donación en el depósito y ejecuta el matchmaking automáticamente
+        para asignarla a una necesidad material insatisfecha. 
+        
+        Puede fallar si:
+        - El depósito no existe (404)
+        - La cantidad es inválida o el depósito está lleno (400)
+        - No hay necesidades insatisfechas para el producto (400)
+        - El depósito no tiene algoritmo configurado (400)
+        - La donación es parcial para una necesidad recurrente (400)
+      parameters:
+        - $ref: '#/components/parameters/PathId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GestionDonacionRequestDTO'
+            example:
+              donacionID: "don-001"
+              productoID: "prod-001"
+              cantidad: 10
+      responses:
+        '201':
+          description: Donación gestionada y matchmaking ejecutado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepositoDTO'
+        '400':
+          description: Error de validación o regla de negocio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                sinNecesidades:
+                  summary: Sin necesidades insatisfechas
+                  value: "No hay necesidades materiales insatisfechas"
+                sinAlgoritmo:
+                  summary: Algoritmo no configurado
+                  value: "El depósito no tiene algoritmo configurado"
+                donacionParcial:
+                  summary: Donación parcial no permitida
+                  value: "Las necesidades recurrentes no admiten donaciones parciales"
+                depositoLleno:
+                  summary: Depósito lleno
+                  value: "El depósito está lleno"
+        '404':
+          description: Depósito no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "No existe un deposito con ese ID"
+
+  /asignaciones:
+    get:
+      tags: [Asignaciones]
+      summary: Obtener todas las asignaciones
+      description: Retorna la lista completa de asignaciones registradas.
+      responses:
+        '200':
+          description: Lista de asignaciones obtenida exitosamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AsignacionDTO'
+
   /asignaciones/{id}:
     get:
-      summary: Obtener una asignación por ID
+      tags: [Asignaciones]
+      summary: Obtener asignación por ID
+      description: Retorna los datos de una asignación específica.
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+        - $ref: '#/components/parameters/PathId'
       responses:
         '200':
           description: Asignación encontrada
@@ -93,146 +229,195 @@ paths:
                 $ref: '#/components/schemas/AsignacionDTO'
         '404':
           description: Asignación no encontrada
-
-  # ---------------- GESTION DONACIONES ----------------
-  /depositos/{id}/donacion:
-    post:
-      summary: Gestionar una Donacion
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GestionDonacionDTO'
-      responses:
-        '201':
-          description: Deposito con la donacion registrada
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DepositoDTO'
-        '404':
-          description: Depósito no encontrado
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "No existe una asignacion con ese ID"
 
-  # ---------------- ENTREGAS ----------------
   /entregas:
     post:
-      summary: Registrar la entrega de un paquete
+      tags: [Entregas]
+      summary: Reportar entrega de un paquete
+      description: |
+        Registra la entrega de un paquete. Internamente:
+        1. Busca la asignación correspondiente al paquete
+        2. Satisface la necesidad en el sistema de donadores y entidades
+        3. Cambia el estado de la donación a ACEPTADA
+        4. Marca la asignación como COMPLETADA
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/PaqueteDTO'
+            example:
+              id: "paq-001"
+              donacionID: "don-001"
+              producto: "Arroz"
+              cantidad: 10
       responses:
         '201':
-          description: Entrega registrada correctamente
+          description: Entrega registrada exitosamente
         '404':
-          description: Paquete o asignacion no encontrados
+          description: No existe asignación para el paquete indicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "No existe un paquete con ese ID"
+
+  /limpiarBase:
+    delete:
+      tags: [Administración]
+      summary: Limpiar base de datos
+      description: Elimina todos los depósitos y asignaciones. Usar solo en entornos de prueba.
+      responses:
+        '200':
+          description: Base de datos limpiada exitosamente
+          content:
+            application/json:
+              schema:
+                type: string
+              example: "Base de datos limpiada"
 
 components:
-  schemas:
-    DepositoBase:
-      type: object
-      properties:
-        nombre:
-          type: string
-        direccion:
-          type: string
-        capacidadMaxima:
-          type: number
-    
-    DepositoRequest:
-      allOf:
-        - $ref: '#/components/schemas/DepositoBase'
 
-    DepositoResponse:
-      allOf:
-        - $ref: '#/components/schemas/DepositoDTO'
-        - type: object
-          properties:
-            id:
-              type: string
-            stockActual:
-              type: array
-              items:
-                $ref: '#/components/schemas/PaqueteDTO'
-    
-    AsignacionDTO:
+  parameters:
+    PathId:
+      name: id
+      in: path
+      required: true
+      description: Identificador único del recurso
+      schema:
+        type: string
+      example: "dep-001"
+
+  schemas:
+
+    DepositoDTO:
       type: object
+      description: Representa un depósito de almacenamiento de paquetes
       properties:
         id:
           type: string
-        paqueteID:
+          description: Identificador único del depósito
+          example: "dep-001"
+        nombre:
           type: string
-        necesidadID:
+          description: Nombre del depósito
+          example: "Depósito Central"
+        direccion:
           type: string
-        fecha:
-          type: string
-          format: date
-        estado:
-          type: string
-          enum: [ASIGNADA, COMPLETADA]
+          description: Dirección física del depósito
+          example: "Av. Corrientes 1234"
+        capacidadMaxima:
+          type: integer
+          description: Capacidad máxima de paquetes que puede almacenar (obligatorio al crear)
+          example: 100
+        algoritmo:
+          $ref: '#/components/schemas/TipoAlgoritmoEnum'
+        stockActual:
+          type: array
+          description: Lista de paquetes actualmente almacenados
+          items:
+            $ref: '#/components/schemas/PaqueteDTO'
       required:
-        - paqueteID
-        - necesidadID
-        - fecha
-        - estado
-
-    GestionDonacionDTO:
-      type: object
-      properties:
-        depositoID:
-          type: string
-        donacionID:
-          type: string
-        productoID:
-          type: string
-        cantidad:
-          type: number
-      required:
-        - depositoID
-        - productoID
-        - cantidad
+        - capacidadMaxima
 
     PaqueteDTO:
       type: object
+      description: Representa un paquete de productos donados
       properties:
         id:
           type: string
+          description: Identificador único del paquete
+          example: "paq-001"
         donacionID:
           type: string
+          description: ID de la donación asociada
+          example: "don-001"
         producto:
           type: string
+          description: Nombre o identificador del producto
+          example: "Arroz"
         cantidad:
-          type: integer  
-      required:
-        - id 
-    DepositoDTO:
+          type: integer
+          description: Cantidad de unidades del producto
+          example: 10
+
+    AsignacionDTO:
       type: object
+      description: Representa la asignación de un paquete a una necesidad material
       properties:
         id:
           type: string
-        algoritmo:
+          description: Identificador único de la asignación
+          example: "asig-001"
+        paqueteID:
           type: string
-          enum: [PRIORIDAD_POR_SCORE, SUB_ATENDIDOS]
-        nombre:
+          description: ID del paquete asignado
+          example: "paq-001"
+        necesidadID:
           type: string
-        direccion:
+          description: ID de la necesidad material cubierta
+          example: "nec-001"
+        fecha:
           type: string
-        capacidadMaxima:
+          format: date-time
+          description: Fecha y hora en que se realizó la asignación
+          example: "2025-06-01T14:30:00"
+        estado:
+          $ref: '#/components/schemas/EstadoAsginacionEnum'
+
+    GestionDonacionRequestDTO:
+      type: object
+      description: Datos necesarios para gestionar una donación en un depósito
+      properties:
+        donacionID:
+          type: string
+          description: ID de la donación a gestionar
+          example: "don-001"
+        productoID:
+          type: string
+          description: ID del producto donado
+          example: "prod-001"
+        cantidad:
           type: integer
-        stockActual:
-          type: array
-          items:
-            $ref: '#/components/schemas/PaqueteDTO'
+          description: Cantidad de unidades donadas
+          example: 10
+      required:
+        - donacionID
+        - productoID
+        - cantidad
+
+    TipoAlgoritmoEnum:
+      type: string
+      description: |
+        Algoritmo de matchmaking utilizado por el depósito:
+        - `SUB_ATENDIDOS`: prioriza las entidades que han recibido menos atención
+        - `PRIORIDAD_POR_SCORE`: prioriza según el score de cada entidad
+      enum:
+        - SUB_ATENDIDOS
+        - PRIORIDAD_POR_SCORE
+      example: "SUB_ATENDIDOS"
+
+    EstadoAsginacionEnum:
+      type: string
+      description: |
+        Estado de una asignación:
+        - `ASIGNADA`: el paquete fue asignado a una necesidad pero aún no entregado
+        - `COMPLETADA`: la entrega fue reportada y la necesidad satisfecha
+      enum:
+        - ASIGNADA
+        - COMPLETADA
+      example: "ASIGNADA"
+
+    ErrorResponse:
+      type: string
+      description: Mensaje de error descriptivo retornado por el servidor
+      example: "No existe un deposito con ese ID"
 servers:
   # Added by API Auto Mocking Plugin
   - description: SwaggerHub API Auto Mocking
-    url: https://virtserver.swaggerhub.com/utn-19f/API_LOGISTICA/1.0.0
+    url: https://virtserver.swaggerhub.com/utn-046/API_LOGISTICA/1.0.0
