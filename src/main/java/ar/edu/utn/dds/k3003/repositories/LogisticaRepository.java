@@ -27,25 +27,19 @@ public class LogisticaRepository {
     @PostConstruct  // ← se ejecuta una vez al levantar la app
     public void inicializarContadores() {
         long maxDeposito = depositosRepo.findAll().stream()
-                .map(d -> d.getId())
-                .filter(id -> id.matches("\\d+"))  // ← ignora UUIDs
-                .mapToLong(Long::parseLong)
-                .max()
+                .map(d -> Long.parseLong(d.getId()))
+                .max(Long::compareTo)
                 .orElse(0L);
 
         long maxAsignacion = asignacionesRepo.findAll().stream()
-                .map(a -> a.getId())
-                .filter(id -> id.matches("\\d+"))
-                .mapToLong(Long::parseLong)
-                .max()
+                .map(a -> Long.parseLong(a.getId()))
+                .max(Long::compareTo)
                 .orElse(0L);
 
         long maxPaquete = depositosRepo.findAll().stream()
                 .flatMap(d -> d.getStockActual().stream())
-                .map(p -> p.getId())
-                .filter(id -> id.matches("\\d+"))
-                .mapToLong(Long::parseLong)
-                .max()
+                .map(p -> Long.parseLong(p.getId()))
+                .max(Long::compareTo)
                 .orElse(0L);
 
         idSecuencialDepositos  = new AtomicLong(maxDeposito + 1);
