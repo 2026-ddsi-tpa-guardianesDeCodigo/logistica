@@ -18,6 +18,7 @@ public class PrioridadPorScore implements Algoritmo{
         int cantidadObjetivo = necesidad.getCantidadObjetivo();
         int urgencia = necesidad.getNivelDeUrgencia();
 
-        return urgencia / (cantidadDonada / cantidadObjetivo);
+        int cobertura = Math.max(1, cantidadDonada / cantidadObjetivo);
+        return urgencia / cobertura;
     }
 }

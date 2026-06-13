@@ -6,7 +6,6 @@ import ar.edu.utn.dds.k3003.exceptions.DepositoLleno;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Entity
 @Table(name = "depositos")
@@ -29,11 +28,10 @@ public class Deposito {
   private List<Paquete> stockActual = new ArrayList<>();
 
   public Deposito() {
-    this.id = UUID.randomUUID().toString();
   }
 
   public Deposito(String id, String nombre, String direccion, Integer capacidadMaxima) {
-    this.id = (id != null) ? id : UUID.randomUUID().toString();
+    this.id = id;
     this.nombre = nombre;
     this.direccion = direccion;
     this.capacidadMaxima = capacidadMaxima;
@@ -75,7 +73,6 @@ public class Deposito {
     if (capacidadMaxima != null && capacidadMaxima == stockActual.size()) {
       throw new DepositoLleno("El deposito esta lleno");
     }
-    paquete.setId(UUID.randomUUID().toString());
     paquete.setDeposito(this);
     stockActual.add(paquete);
     return paquete;

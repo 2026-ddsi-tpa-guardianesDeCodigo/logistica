@@ -25,8 +25,12 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({DonacionParcialNoPermitida.class,
+            DonacionParcialNoPermitida.class,
             AlgoritmoNoConfiguradoException.class,
-            NoHayNecesidades.class})
+            NoHayNecesidades.class,
+            IllegalArgumentException.class,
+            CantidadDeProductoInvalida.class,
+            DepositoLleno.class})
     public ResponseEntity<String> handleBadRequest(Exception e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
     }

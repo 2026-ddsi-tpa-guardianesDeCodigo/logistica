@@ -4,6 +4,7 @@ import ar.edu.utn.dds.k3003.Fachada;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.*;
 import ar.edu.utn.dds.k3003.model.GestionDonacionRequestDTO;
 import org.springframework.http.HttpStatus;
@@ -71,10 +72,16 @@ public class LogisticaController {
     return ResponseEntity.ok(fachada.obtenerTodasLasAsignaciones());
   }
 
-  @DeleteMapping("/admin/reset")
+  @DeleteMapping("/limpiarBase")
   public ResponseEntity<String> resetDb() {
     fachada.limpiarBaseDeDatos();
     return ResponseEntity.ok("Base de datos limpiada");
+  }
+
+  @PatchMapping("/depositos/{id}/algoritmo")
+  public ResponseEntity<Void> setAlgoritmo(@PathVariable String id, @RequestBody TipoAlgoritmoEnum tipoAlgoritmo) {
+    fachada.setAlgoritmoMM(id, tipoAlgoritmo);
+    return ResponseEntity.ok().build();
   }
 
 }

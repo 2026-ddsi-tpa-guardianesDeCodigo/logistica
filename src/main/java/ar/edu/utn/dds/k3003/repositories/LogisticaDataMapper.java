@@ -65,7 +65,6 @@ public class LogisticaDataMapper {
             asignacionDTO.fecha(),
             asignacionDTO.estado()
     );
-    asignacion.setId(asignacionDTO.id());
     return asignacion;
   }
 

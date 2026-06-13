@@ -1,7 +1,6 @@
 package ar.edu.utn.dds.k3003.model;
 
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.AsignacionDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
+import ar.edu.utn.dds.k3003.exceptions.NoHayNecesidades;
 
 import java.util.Comparator;
 import java.util.List;
@@ -13,7 +12,7 @@ public class PrioridadASubAtendidos implements Algoritmo{
 
         return necesidadesDeEntidades.stream()
                 .max(Comparator.comparingInt(NecesidadMaterial::getCantidadObjetivo))
-                .orElse(null);
+                .orElseThrow(() -> new NoHayNecesidades("No hay necesidades materiales insatisfechas"));
 
     }
 }
