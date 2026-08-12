@@ -5,6 +5,9 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonaciones;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaDonadoresYEntidades;
 import ar.edu.utn.dds.k3003.catedra.fachadas.FachadaLogistica;
+import ar.edu.utn.dds.k3003.model.ConsumoStockRequestDTO;
+import ar.edu.utn.dds.k3003.model.ConsumoStockResponseDTO;
+import ar.edu.utn.dds.k3003.model.StockDisponibleDTO;
 import ar.edu.utn.dds.k3003.services.LogisticaService;
 import org.springframework.stereotype.Component;
 
@@ -91,5 +94,13 @@ public class Fachada implements FachadaLogistica {
 
   public void limpiarBaseDeDatos() {
     logisticaService.limpiarBaseDeDatos();
+  }
+
+  public StockDisponibleDTO consultarStockDisponible(String productoID) {
+    return logisticaService.consultarStockDisponible(productoID);
+  }
+
+  public ConsumoStockResponseDTO consumirStock(ConsumoStockRequestDTO request) {
+    return logisticaService.consumirStock(request.productoID(), request.necesidadID(), request.cantidadNecesaria());
   }
 }

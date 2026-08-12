@@ -60,7 +60,8 @@ public class LogisticaDataMapper {
             asignacionDTO.paqueteID(),
             asignacionDTO.necesidadID(),
             asignacionDTO.fecha(),
-            asignacionDTO.estado()
+            asignacionDTO.estado(),
+            asignacionDTO.origen()
     );
   }
 
@@ -70,7 +71,8 @@ public class LogisticaDataMapper {
             asignacion.getPaqueteID(),
             asignacion.getNecesidadID(),
             asignacion.getFecha(),
-            asignacion.getEstado()
+            asignacion.getEstado(),
+            asignacion.getOrigen()
     );
   }
 

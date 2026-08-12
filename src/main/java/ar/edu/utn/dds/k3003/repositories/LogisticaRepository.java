@@ -80,4 +80,12 @@ public class LogisticaRepository {
     public Paquete guardarPaquete(Paquete paquete) {
         return paquetesRepo.save(paquete);
     }
+
+    public List<Paquete> buscarPaquetesEnStockPorProducto(String producto) {
+        return paquetesRepo.findByProductoAndDepositoIsNotNullOrderByIdAsc(producto);
+    }
+
+    public void eliminarPaquete(Paquete paquete) {
+        paquetesRepo.eliminarPorId(paquete.getId());
+    }
 }

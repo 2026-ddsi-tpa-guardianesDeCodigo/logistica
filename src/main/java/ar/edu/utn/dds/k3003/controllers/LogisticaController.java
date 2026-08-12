@@ -6,7 +6,10 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.*;
+import ar.edu.utn.dds.k3003.model.ConsumoStockRequestDTO;
+import ar.edu.utn.dds.k3003.model.ConsumoStockResponseDTO;
 import ar.edu.utn.dds.k3003.model.GestionDonacionRequestDTO;
+import ar.edu.utn.dds.k3003.model.StockDisponibleDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -82,6 +85,16 @@ public class LogisticaController {
   public ResponseEntity<Void> setAlgoritmo(@PathVariable String id, @RequestBody TipoAlgoritmoEnum tipoAlgoritmo) {
     fachada.setAlgoritmoMM(id, tipoAlgoritmo);
     return ResponseEntity.ok().build();
+  }
+
+  @GetMapping("/stock")
+  public ResponseEntity<StockDisponibleDTO> getStockDisponible(@RequestParam String productoID) {
+    return ResponseEntity.ok(fachada.consultarStockDisponible(productoID));
+  }
+
+  @PostMapping("/stock/consumo")
+  public ResponseEntity<ConsumoStockResponseDTO> postConsumoStock(@RequestBody ConsumoStockRequestDTO request) {
+    return ResponseEntity.ok(fachada.consumirStock(request));
   }
 
 }

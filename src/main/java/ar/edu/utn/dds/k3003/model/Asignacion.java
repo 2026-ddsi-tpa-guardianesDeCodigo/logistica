@@ -1,6 +1,7 @@
 package ar.edu.utn.dds.k3003.model;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.OrigenAsignacionEnum;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -19,13 +20,22 @@ public class Asignacion {
     @Enumerated(EnumType.STRING)
     private EstadoAsginacionEnum estado;
 
+    @Enumerated(EnumType.STRING)
+    private OrigenAsignacionEnum origen;
+
     public Asignacion() {}
 
-    public Asignacion(String paqueteID, String necesidadID, LocalDateTime fecha, EstadoAsginacionEnum estado) {
+    public Asignacion(
+            String paqueteID,
+            String necesidadID,
+            LocalDateTime fecha,
+            EstadoAsginacionEnum estado,
+            OrigenAsignacionEnum origen) {
         this.paqueteID = paqueteID;
         this.necesidadID = necesidadID;
         this.fecha = fecha;
         this.estado = estado;
+        this.origen = origen;
     }
 
     public Long getId() { return id; }
@@ -38,4 +48,6 @@ public class Asignacion {
     public void setFecha(LocalDateTime fecha) { this.fecha = fecha; }
     public EstadoAsginacionEnum getEstado() { return estado; }
     public void setEstado(EstadoAsginacionEnum estado) { this.estado = estado; }
+    public OrigenAsignacionEnum getOrigen() { return origen; }
+    public void setOrigen(OrigenAsignacionEnum origen) { this.origen = origen; }
 }

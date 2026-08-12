@@ -13,6 +13,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.val;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -39,6 +40,7 @@ public class LogisticaService {
     private final Counter entregasReportadas;
     private final Counter erroresNoEncontrado;
     private final Counter erroresNegocio;
+    private final Counter asignacionesSolicitudDirecta;
     private final Timer tiempoMatchmaking;
 
     public LogisticaService(
@@ -87,6 +89,11 @@ public class LogisticaService {
 
         this.tiempoMatchmaking = Timer.builder("logistica.matchmaking.tiempo")
                 .description("Tiempo de ejecuciÃ³n del matchmaking")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
+
+        this.asignacionesSolicitudDirecta = Counter.builder("logistica.asignaciones.solicitud_directa")
+                .description("Cantidad de asignaciones hechas por consumo directo de stock")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
     }
@@ -180,7 +187,8 @@ public class LogisticaService {
         val paqueteAsignado = logisticaRepository.guardarPaquete(
                 new Paquete(donacionID, productoID, cantidadAAsignar));
         val asignacion = new Asignacion(
-                paqueteAsignado.getId().toString(), necesidadElegida.id(), LocalDateTime.now(), ASIGNADA);
+                paqueteAsignado.getId().toString(), necesidadElegida.id(), LocalDateTime.now(), ASIGNADA,
+                OrigenAsignacionEnum.MATCHMAKING);
         logisticaRepository.guardarAsignacion(asignacion);
         matchmakingsEjecutados.increment();
 
@@ -234,7 +242,8 @@ public class LogisticaService {
                 erroresNegocio.increment();
                 throw new DonacionParcialNoPermitida("Las necesidades recurrentes no admiten donaciones parciales");
             }
-            val asignacion = new Asignacion(paqueteDTO.id(), necesidadElegidaDTO.id(), LocalDateTime.now(), ASIGNADA);
+            val asignacion = new Asignacion(paqueteDTO.id(), necesidadElegidaDTO.id(), LocalDateTime.now(), ASIGNADA,
+                    OrigenAsignacionEnum.MATCHMAKING);
             val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
             matchmakingsEjecutados.increment();
             return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
@@ -302,5 +311,50 @@ public class LogisticaService {
     public void limpiarBaseDeDatos() {
         logisticaRepository.limpiarAsignaciones();
         logisticaRepository.limpiarDepositos();
+    }
+
+    public StockDisponibleDTO consultarStockDisponible(String productoID) {
+        int cantidadDisponible = logisticaRepository.buscarPaquetesEnStockPorProducto(productoID).stream()
+                .mapToInt(Paquete::getCantidad)
+                .sum();
+        return new StockDisponibleDTO(productoID, cantidadDisponible);
+    }
+
+    @Transactional
+    public ConsumoStockResponseDTO consumirStock(String productoID, String necesidadID, Integer cantidadNecesaria) {
+        if (cantidadNecesaria == null || cantidadNecesaria <= 0) {
+            throw new CantidadDeProductoInvalida("La cantidad necesaria debe ser mayor o igual a 1");
+        }
+
+        List<Paquete> paquetesEnStock = logisticaRepository.buscarPaquetesEnStockPorProducto(productoID);
+        List<AsignacionDTO> asignaciones = new ArrayList<>();
+        int restante = cantidadNecesaria;
+
+        for (Paquete paquete : paquetesEnStock) {
+            if (restante == 0) {
+                break;
+            }
+            int tomado = Math.min(restante, paquete.getCantidad());
+
+            if (tomado == paquete.getCantidad()) {
+                logisticaRepository.eliminarPaquete(paquete);
+            } else {
+                paquete.setCantidad(paquete.getCantidad() - tomado);
+                logisticaRepository.guardarPaquete(paquete);
+            }
+
+            val paqueteAsignado = logisticaRepository.guardarPaquete(
+                    new Paquete(paquete.getDonacionID(), productoID, tomado));
+            val asignacion = new Asignacion(
+                    paqueteAsignado.getId().toString(), necesidadID, LocalDateTime.now(), ASIGNADA,
+                    OrigenAsignacionEnum.SOLICITUD_DIRECTA);
+            val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
+            asignaciones.add(logisticaDataMapper.toAsignacionDTO(asignacionGuardada));
+            asignacionesSolicitudDirecta.increment();
+
+            restante -= tomado;
+        }
+
+        return new ConsumoStockResponseDTO(cantidadNecesaria - restante, asignaciones);
     }
 }
