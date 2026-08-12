@@ -15,6 +15,7 @@ import lombok.val;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -131,28 +132,68 @@ public class LogisticaService {
                     erroresNoEncontrado.increment();
                     return new DepositoNoEncontradoException("No existe un deposito con ese ID");
                 });
-        deposito.verificarCantidad(cantidad);
+        deposito.verificarCantidadValida(cantidad);
 
         val necesidadesMaterialesDTO = donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe(productoID);
-        if (necesidadesMaterialesDTO.isEmpty()) {
-            erroresNegocio.increment();
-            throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
-        }
 
-        // 1. Crear el paquete en memoria (sin ID aÃºn, sin persistir)
-        val paquete = new Paquete(donacionID, productoID, cantidad);
-
-        // 2. Ejecutar matchmaking ANTES de persistir el paquete.
-        //    AsÃ­ cuando ejecutarMatchmaking llama a buscarDepositoPorID,
-        //    JPA trae el depÃ³sito SIN este paquete â†’ no hay duplicaciÃ³n.
-        this.ejecutarMatchmaking(depositoID, logisticaDataMapper.toPaqueteDTO(paquete), necesidadesMaterialesDTO);
-
-        // 3. ReciÃ©n ahora agregar y persistir el paquete (una sola vez)
-        deposito.agregarPaquete(paquete);
-        val depositoGuardado = logisticaRepository.guardarDeposito(deposito);
+        val depositoActualizado = this.asignarOGuardarEnStock(
+                deposito, donacionID, productoID, cantidad, necesidadesMaterialesDTO);
 
         donacionesGestionadas.increment();
-        return logisticaDataMapper.toDepositoDTO(depositoGuardado);
+        return logisticaDataMapper.toDepositoDTO(depositoActualizado);
+    }
+
+    private Deposito asignarOGuardarEnStock(
+            Deposito deposito,
+            String donacionID,
+            String productoID,
+            Integer cantidad,
+            List<NecesidadMaterialDTO> necesidadesDisponibles) {
+
+        if (necesidadesDisponibles.isEmpty()) {
+            return guardarEnStock(deposito, donacionID, productoID, cantidad);
+        }
+
+        Algoritmo algoritmoDelDeposito = deposito.getAlgoritmoObj();
+        if (algoritmoDelDeposito == null) {
+            erroresNegocio.increment();
+            throw new AlgoritmoNoConfiguradoException("El depósito no tiene algoritmo configurado");
+        }
+
+        List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDisponibles.stream()
+                .map(logisticaDataMapper::toNecesidadDeEntidad).toList();
+        val paqueteCandidato = new Paquete(donacionID, productoID, cantidad);
+        val necesidadElegidaModelo = algoritmoDelDeposito.correr(paqueteCandidato, necesidadesDeEntidades);
+        int indice = necesidadesDeEntidades.indexOf(necesidadElegidaModelo);
+        val necesidadElegida = necesidadesDisponibles.get(indice);
+
+        boolean noAlcanza = cantidad < necesidadElegida.cantidadObjetivo();
+        if (noAlcanza && necesidadElegida.tipo() == TipoNecesidadMaterialEnum.RECURRENTE) {
+            val restantes = new ArrayList<>(necesidadesDisponibles);
+            restantes.remove(indice);
+            return asignarOGuardarEnStock(deposito, donacionID, productoID, cantidad, restantes);
+        }
+
+        int cantidadAAsignar = Math.min(cantidad, necesidadElegida.cantidadObjetivo());
+        int sobrante = cantidad - cantidadAAsignar;
+
+        val paqueteAsignado = logisticaRepository.guardarPaquete(
+                new Paquete(donacionID, productoID, cantidadAAsignar));
+        val asignacion = new Asignacion(
+                paqueteAsignado.getId().toString(), necesidadElegida.id(), LocalDateTime.now(), ASIGNADA);
+        logisticaRepository.guardarAsignacion(asignacion);
+        matchmakingsEjecutados.increment();
+
+        if (sobrante > 0) {
+            return guardarEnStock(deposito, donacionID, productoID, sobrante);
+        }
+        return logisticaRepository.guardarDeposito(deposito);
+    }
+
+    private Deposito guardarEnStock(Deposito deposito, String donacionID, String productoID, Integer cantidad) {
+        deposito.verificarCantidad(cantidad);
+        deposito.agregarPaquete(new Paquete(donacionID, productoID, cantidad));
+        return logisticaRepository.guardarDeposito(deposito);
     }
 
     public void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum tipoAlgoritmo) {
@@ -193,7 +234,7 @@ public class LogisticaService {
                 erroresNegocio.increment();
                 throw new DonacionParcialNoPermitida("Las necesidades recurrentes no admiten donaciones parciales");
             }
-            val asignacion = new Asignacion(null, paquete.getId(), necesidadElegidaDTO.id(), LocalDateTime.now(), ASIGNADA);
+            val asignacion = new Asignacion(paqueteDTO.id(), necesidadElegidaDTO.id(), LocalDateTime.now(), ASIGNADA);
             val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
             matchmakingsEjecutados.increment();
             return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
@@ -239,7 +280,7 @@ public class LogisticaService {
     public PaqueteDTO buscarPaquetePorID(String paqueteID) {
         return logisticaRepository.obtenerTodosLosDepositos().stream()
                 .flatMap(deposito -> deposito.getStockActual().stream())
-                .filter(paquete -> paquete.getId().equals(paqueteID))
+                .filter(paquete -> paquete.getId().toString().equals(paqueteID))
                 .map(logisticaDataMapper::toPaqueteDTO)
                 .findFirst()
                 .orElseThrow(() -> {

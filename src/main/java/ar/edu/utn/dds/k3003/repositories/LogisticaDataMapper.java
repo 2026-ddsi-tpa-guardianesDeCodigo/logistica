@@ -18,7 +18,7 @@ public class LogisticaDataMapper {
             .toList();
 
     return new DepositoDTO(
-            deposito.getId(),
+            deposito.getId() != null ? deposito.getId().toString() : null,
             deposito.getAlgoritmo(),
             deposito.getNombre(),
             deposito.getDireccion(),
@@ -29,19 +29,17 @@ public class LogisticaDataMapper {
 
   public Deposito toDeposito(DepositoDTO depositoDTO) {
     var deposito = new Deposito(
-        depositoDTO.id(),
-        depositoDTO.nombre(),
-        depositoDTO.direccion(),
-        depositoDTO.capacidadMaxima()
+            depositoDTO.nombre(),
+            depositoDTO.direccion(),
+            depositoDTO.capacidadMaxima()
     );
-
     deposito.setAlgoritmo(depositoDTO.algoritmo());
-
     return deposito;
   }
+
   public PaqueteDTO toPaqueteDTO(Paquete paquete){
     return new PaqueteDTO(
-            paquete.getId(),
+            paquete.getId() != null ? paquete.getId().toString() : null,
             paquete.getDonacionID(),
             paquete.getProducto(),
             paquete.getCantidad()
@@ -49,44 +47,30 @@ public class LogisticaDataMapper {
   }
 
   public Paquete toPaquete(PaqueteDTO paqueteDTO){
-    var paquete =  new Paquete(
+    // Ya no seteamos el id: si el DTO trae uno, se ignora — lo genera la BD.
+    return new Paquete(
             paqueteDTO.donacionID(),
             paqueteDTO.producto(),
             paqueteDTO.cantidad()
     );
-    paquete.setId(paqueteDTO.id());
-    return paquete;
   }
+
   public Asignacion toAsignacion(AsignacionDTO asignacionDTO){
-    var asignacion =  new Asignacion(
-            asignacionDTO.id(),
+    return new Asignacion(
             asignacionDTO.paqueteID(),
             asignacionDTO.necesidadID(),
             asignacionDTO.fecha(),
             asignacionDTO.estado()
     );
-    return asignacion;
   }
 
   public AsignacionDTO toAsignacionDTO(Asignacion asignacion){
     return new AsignacionDTO(
-            asignacion.getId(),
+            asignacion.getId() != null ? asignacion.getId().toString() : null,
             asignacion.getPaqueteID(),
             asignacion.getNecesidadID(),
             asignacion.getFecha(),
             asignacion.getEstado()
-    );
-  }
-
-  public NecesidadMaterialDTO toNecesidadDeEntidadDTO (NecesidadMaterial necesidad) {
-    return new NecesidadMaterialDTO(
-            necesidad.getId(),
-            necesidad.getEntidadID(),
-            necesidad.getNivelDeUrgencia(),
-            necesidad.getDescripcion(),
-            necesidad.getCantidadObjetivo(),
-            necesidad.getProductoSolicitadoID(),
-            necesidad.getTipo()
     );
   }
 

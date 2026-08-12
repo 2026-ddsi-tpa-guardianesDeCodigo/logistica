@@ -12,7 +12,8 @@ import java.util.List;
 public class Deposito {
 
   @Id
-  private String id;
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
+  private Long id;
 
   @Enumerated(EnumType.STRING)
   private TipoAlgoritmoEnum algoritmo;
@@ -30,8 +31,7 @@ public class Deposito {
   public Deposito() {
   }
 
-  public Deposito(String id, String nombre, String direccion, Integer capacidadMaxima) {
-    this.id = id;
+  public Deposito(String nombre, String direccion, Integer capacidadMaxima) {
     this.nombre = nombre;
     this.direccion = direccion;
     this.capacidadMaxima = capacidadMaxima;
@@ -48,8 +48,8 @@ public class Deposito {
     }
   }
 
-  public String getId() { return id; }
-  public void setId(String id) { this.id = id; }
+  public Long getId() { return id; }
+  public void setId(Long id) { this.id = id; }
   public TipoAlgoritmoEnum getAlgoritmo() { return algoritmo; }
   public void setAlgoritmo(TipoAlgoritmoEnum algoritmo) { this.algoritmo = algoritmo; }
   public Algoritmo getAlgoritmoObj() { return algoritmoObj; }
@@ -63,16 +63,23 @@ public class Deposito {
   public List<Paquete> getStockActual() { return stockActual; }
   public void setStockActual(List<Paquete> stockActual) { this.stockActual = stockActual; }
 
-  public void verificarCantidad(Integer cantidad) {
+  public void verificarCantidadValida(Integer cantidad) {
     if (cantidad == null || cantidad <= 0) {
       throw new CantidadDeProductoInvalida("La cantidad de productos debe ser mayor o igual a 1");
     }
   }
 
-  public Paquete agregarPaquete(Paquete paquete) {
-    if (capacidadMaxima != null && capacidadMaxima == stockActual.size()) {
-      throw new DepositoLleno("El deposito esta lleno");
+  public void verificarCantidad(Integer cantidad) {
+    verificarCantidadValida(cantidad);
+    if (capacidadMaxima != null) {
+      int ocupado = stockActual.stream().mapToInt(Paquete::getCantidad).sum();
+      if (ocupado + cantidad > capacidadMaxima) {
+        throw new DepositoLleno("No hay espacio suficiente en el depósito");
+      }
     }
+  }
+
+  public Paquete agregarPaquete(Paquete paquete) {
     paquete.setDeposito(this);
     stockActual.add(paquete);
     return paquete;

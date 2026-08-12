@@ -4,13 +4,15 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum;
 import ar.edu.utn.dds.k3003.exceptions.AsignacionNoEncontrada;
 import ar.edu.utn.dds.k3003.model.Asignacion;
 import ar.edu.utn.dds.k3003.model.Deposito;
-import jakarta.annotation.PostConstruct;
+import ar.edu.utn.dds.k3003.model.Paquete;
+import ar.edu.utn.dds.k3003.repositories.JpaAsignacionesRepo;
+import ar.edu.utn.dds.k3003.repositories.JpaDepositosRepo;
+import ar.edu.utn.dds.k3003.repositories.JpaPaquetesRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Component
 public class LogisticaRepository {
@@ -19,50 +21,17 @@ public class LogisticaRepository {
     private JpaDepositosRepo depositosRepo;
     @Autowired
     private JpaAsignacionesRepo asignacionesRepo;
-
-    private AtomicLong idSecuencialDepositos;
-    private AtomicLong idSecuencialAsignaciones;
-    private AtomicLong idSecuencialPaquetes;
-
-    @PostConstruct  // ← se ejecuta una vez al levantar la app
-    public void inicializarContadores() {
-        long maxDeposito = depositosRepo.findAll().stream()
-                .map(d -> Long.parseLong(d.getId()))
-                .max(Long::compareTo)
-                .orElse(0L);
-
-        long maxAsignacion = asignacionesRepo.findAll().stream()
-                .map(a -> Long.parseLong(a.getId()))
-                .max(Long::compareTo)
-                .orElse(0L);
-
-        long maxPaquete = depositosRepo.findAll().stream()
-                .flatMap(d -> d.getStockActual().stream())
-                .map(p -> Long.parseLong(p.getId()))
-                .max(Long::compareTo)
-                .orElse(0L);
-
-        idSecuencialDepositos  = new AtomicLong(maxDeposito + 1);
-        idSecuencialAsignaciones = new AtomicLong(maxAsignacion + 1);
-        idSecuencialPaquetes   = new AtomicLong(maxPaquete + 1);
-    }
-
+    @Autowired
+    private JpaPaquetesRepo paquetesRepo;
 
     // ── Depósitos ──────────────────────────────────────────────
 
     public Deposito guardarDeposito(Deposito deposito) {
-        if (deposito.getId() == null || deposito.getId().isBlank()) {
-            deposito.setId(String.valueOf(idSecuencialDepositos.getAndIncrement()));
-        }
-        // Asignar ID a paquetes nuevos antes de persistir en cascada
-        deposito.getStockActual().stream()
-                .filter(p -> p.getId() == null || p.getId().isBlank())
-                .forEach(p -> p.setId(String.valueOf(idSecuencialPaquetes.getAndIncrement())));
         return depositosRepo.save(deposito);
     }
 
     public Optional<Deposito> buscarDepositoPorID(String id) {
-        return depositosRepo.findById(id);
+        return depositosRepo.findById(Long.parseLong(id));
     }
 
     public List<Deposito> obtenerTodosLosDepositos() {
@@ -70,7 +39,7 @@ public class LogisticaRepository {
     }
 
     public void eliminarDeposito(String id) {
-        depositosRepo.deleteById(id);
+        depositosRepo.deleteById(Long.parseLong(id));
     }
 
     public void limpiarDepositos() {
@@ -80,14 +49,11 @@ public class LogisticaRepository {
     // ── Asignaciones ───────────────────────────────────────────
 
     public Asignacion guardarAsignacion(Asignacion asignacion) {
-        if (asignacion.getId() == null || asignacion.getId().isBlank()) {
-            asignacion.setId(String.valueOf(idSecuencialAsignaciones.getAndIncrement()));
-        }
         return asignacionesRepo.save(asignacion);
     }
 
     public Optional<Asignacion> buscarAsignacionPorID(String id) {
-        return asignacionesRepo.findById(id);
+        return asignacionesRepo.findById(Long.parseLong(id));
     }
 
     public Optional<Asignacion> buscarAsignacionPorPaqueteID(String paqueteID) {
@@ -99,7 +65,7 @@ public class LogisticaRepository {
     }
 
     public Asignacion actualizarEstadoAsignacion(String asignacionID, EstadoAsginacionEnum estado) {
-        Asignacion asignacion = asignacionesRepo.findById(asignacionID)
+        Asignacion asignacion = asignacionesRepo.findById(Long.parseLong(asignacionID))
                 .orElseThrow(() -> new AsignacionNoEncontrada("No existe la asignación"));
         asignacion.setEstado(estado);
         return asignacionesRepo.save(asignacion);
@@ -107,5 +73,11 @@ public class LogisticaRepository {
 
     public void limpiarAsignaciones() {
         asignacionesRepo.deleteAll();
+    }
+
+    // ── Paquetes ───────────────────────────────────────────────
+
+    public Paquete guardarPaquete(Paquete paquete) {
+        return paquetesRepo.save(paquete);
     }
 }

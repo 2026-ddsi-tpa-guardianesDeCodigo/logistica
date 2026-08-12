@@ -25,7 +25,6 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({DonacionParcialNoPermitida.class,
-            DonacionParcialNoPermitida.class,
             AlgoritmoNoConfiguradoException.class,
             NoHayNecesidades.class,
             IllegalArgumentException.class,

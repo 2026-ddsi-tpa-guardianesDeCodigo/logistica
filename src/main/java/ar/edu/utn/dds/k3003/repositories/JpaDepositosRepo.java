@@ -5,6 +5,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface JpaDepositosRepo extends JpaRepository<Deposito, String> {
+public interface JpaDepositosRepo extends JpaRepository<Deposito, Long>  {
     // findById, save, deleteById, findAll ya vienen de JpaRepository
 }

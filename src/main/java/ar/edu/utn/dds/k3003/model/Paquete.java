@@ -7,7 +7,8 @@ import jakarta.persistence.*;
 public class Paquete {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     private String donacionID;
     private String producto;
@@ -25,8 +26,8 @@ public class Paquete {
         this.cantidad = cantidad;
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public String getDonacionID() { return donacionID; }
     public void setDonacionID(String donacionID) { this.donacionID = donacionID; }
     public String getProducto() { return producto; }

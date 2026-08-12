@@ -9,7 +9,8 @@ import java.time.LocalDateTime;
 public class Asignacion {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
     private String paqueteID;
     private String necesidadID;
@@ -20,16 +21,15 @@ public class Asignacion {
 
     public Asignacion() {}
 
-    public Asignacion(String id, String paqueteID, String necesidadID, LocalDateTime fecha, EstadoAsginacionEnum estado) {
-        this.id = id;
+    public Asignacion(String paqueteID, String necesidadID, LocalDateTime fecha, EstadoAsginacionEnum estado) {
         this.paqueteID = paqueteID;
         this.necesidadID = necesidadID;
         this.fecha = fecha;
         this.estado = estado;
     }
 
-    public String getId() { return id; }
-    public void setId(String id) { this.id = id; }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public String getPaqueteID() { return paqueteID; }
     public void setPaqueteID(String paqueteID) { this.paqueteID = paqueteID; }
     public String getNecesidadID() { return necesidadID; }
