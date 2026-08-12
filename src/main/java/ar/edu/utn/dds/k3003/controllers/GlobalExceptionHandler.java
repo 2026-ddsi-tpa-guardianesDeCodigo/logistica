@@ -20,7 +20,8 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler({DepositoYaExistenteException.class,
-            AsignacionYaExistenteException.class})
+            AsignacionYaExistenteException.class,
+            EntregaYaReportadaException.class})
     public ResponseEntity<String> handleConflict(Exception e) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
     }

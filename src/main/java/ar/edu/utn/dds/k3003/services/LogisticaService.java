@@ -243,6 +243,11 @@ public class LogisticaService {
 
     public void reportarEntrega(PaqueteDTO paqueteDTO) {
         AsignacionDTO asignacionDTO = this.buscarAsignacionPorPaqueteID(paqueteDTO.id());
+        if (asignacionDTO.estado() == COMPLETADA) {
+            erroresNegocio.increment();
+            throw new EntregaYaReportadaException(
+                    "La entrega del paquete " + paqueteDTO.id() + " ya fue reportada anteriormente");
+        }
         donadoresYEntidadesClient.satisfacerNecesidad(asignacionDTO.necesidadID(), paqueteDTO.cantidad());
         donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
         logisticaRepository.actualizarEstadoAsignacion(asignacionDTO.id(), COMPLETADA);
