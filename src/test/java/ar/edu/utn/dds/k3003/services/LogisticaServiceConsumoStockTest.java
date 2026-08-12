@@ -13,11 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import java.util.List;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.when;
 
 @SpringBootTest
 class LogisticaServiceConsumoStockTest {
@@ -43,12 +40,18 @@ class LogisticaServiceConsumoStockTest {
         DepositoDTO deposito = logisticaService.agregarDeposito(
                 new DepositoDTO(null, null, "deposito-test", "direccion", 100, null));
         depositoID = deposito.id();
-        when(donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe("prodStock")).thenReturn(List.of());
+    }
+
+    // Desde Parte B, gestionarDonacion solo encola: para simular stock ya existente en los
+    // tests, hay que persistirlo directo via persistirResultadoWorker (lo que antes hacia
+    // gestionarDonacion de forma sincronica cuando no habia necesidades).
+    private void agregarAlStock(String donacionID, Integer cantidad) {
+        logisticaService.persistirResultadoWorker(depositoID, donacionID, "prodStock", null, 0, cantidad);
     }
 
     @Test
     void consultarStockDisponible_sumaLosPaquetesEnStock() {
-        logisticaService.gestionarDonacion(depositoID, "don1", "prodStock", 10);
+        agregarAlStock("don1", 10);
 
         StockDisponibleDTO stock = logisticaService.consultarStockDisponible("prodStock");
 
@@ -58,7 +61,7 @@ class LogisticaServiceConsumoStockTest {
 
     @Test
     void stockSuficiente_consumeSoloLoNecesarioYDejaElResto() {
-        logisticaService.gestionarDonacion(depositoID, "don1", "prodStock", 10);
+        agregarAlStock("don1", 10);
 
         ConsumoStockResponseDTO respuesta = logisticaService.consumirStock("prodStock", "nec1", 6);
 
@@ -71,7 +74,7 @@ class LogisticaServiceConsumoStockTest {
 
     @Test
     void stockParcial_asignaSoloLoDisponible() {
-        logisticaService.gestionarDonacion(depositoID, "don1", "prodStock", 5);
+        agregarAlStock("don1", 5);
 
         ConsumoStockResponseDTO respuesta = logisticaService.consumirStock("prodStock", "nec2", 10);
 
@@ -90,8 +93,8 @@ class LogisticaServiceConsumoStockTest {
 
     @Test
     void stockRepartidoEnVariosPaquetes_consumeFifoYCreaUnaAsignacionPorPaquete() {
-        logisticaService.gestionarDonacion(depositoID, "don1", "prodStock", 5);
-        logisticaService.gestionarDonacion(depositoID, "don2", "prodStock", 5);
+        agregarAlStock("don1", 5);
+        agregarAlStock("don2", 5);
 
         ConsumoStockResponseDTO respuesta = logisticaService.consumirStock("prodStock", "nec4", 8);
 

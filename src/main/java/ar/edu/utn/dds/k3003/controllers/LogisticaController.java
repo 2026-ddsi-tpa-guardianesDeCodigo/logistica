@@ -10,6 +10,7 @@ import ar.edu.utn.dds.k3003.model.ConsumoStockRequestDTO;
 import ar.edu.utn.dds.k3003.model.ConsumoStockResponseDTO;
 import ar.edu.utn.dds.k3003.model.GestionDonacionRequestDTO;
 import ar.edu.utn.dds.k3003.model.StockDisponibleDTO;
+import ar.edu.utn.dds.k3003.model.WorkerResultadoDTO;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
@@ -59,8 +60,16 @@ public class LogisticaController {
 
   @PostMapping("/depositos/{id}/donacion")
   public ResponseEntity <DepositoDTO> postGestionarDonacion(@PathVariable String id, @RequestBody GestionDonacionRequestDTO request){
-
+    // Parte B: la asignacion ahora es asincronica (va a una cola), asi que esto solo
+    // confirma que la donacion fue aceptada y encolada, no el resultado del matchmaking.
     DepositoDTO depositoDTO = fachada.gestionarDonacion(id, request.donacionID(), request.productoID(), request.cantidad());
+    return ResponseEntity.status(HttpStatus.ACCEPTED).body(depositoDTO);
+  }
+
+  @PostMapping("/depositos/{id}/asignaciones/worker")
+  public ResponseEntity<DepositoDTO> postResultadoWorker(
+      @PathVariable String id, @RequestBody WorkerResultadoDTO resultado) {
+    DepositoDTO depositoDTO = fachada.persistirResultadoWorker(id, resultado);
     return ResponseEntity.status(HttpStatus.CREATED).body(depositoDTO);
   }
 

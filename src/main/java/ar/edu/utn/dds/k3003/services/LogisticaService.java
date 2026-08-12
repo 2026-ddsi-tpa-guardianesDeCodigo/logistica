@@ -30,6 +30,7 @@ public class LogisticaService {
     private final LogisticaRepository logisticaRepository;
     private final DonacionesClient donacionesClient;
     private final DonadoresYEntidadesClient donadoresYEntidadesClient;
+    private final DonacionQueuePublisher donacionQueuePublisher;
     private final LogisticaDataMapper logisticaDataMapper = new LogisticaDataMapper();
 
     // --- MÃ©tricas ---
@@ -47,10 +48,12 @@ public class LogisticaService {
             LogisticaRepository logisticaRepository,
             DonacionesClient donacionesClient,
             DonadoresYEntidadesClient donadoresYEntidadesClient,
+            DonacionQueuePublisher donacionQueuePublisher,
             MeterRegistry meterRegistry) {
         this.logisticaRepository = logisticaRepository;
         this.donacionesClient = donacionesClient;
         this.donadoresYEntidadesClient = donadoresYEntidadesClient;
+        this.donacionQueuePublisher = donacionQueuePublisher;
 
         this.depositosCreados = Counter.builder("logistica.depositos.creados")
                 .description("Cantidad de depÃ³sitos creados")
@@ -133,69 +136,57 @@ public class LogisticaService {
         return logisticaDataMapper.toAsignacionDTO(asignacion);
     }
 
+    // Parte B: ya no decide ni persiste la asignacion aca. Solo verifica que haya lugar
+    // (chequeo optimista: si toda la cantidad tuviera que ir a stock, entra) y encola la
+    // donacion para que un Worker (embebido en esta misma instancia via DonacionQueueListener,
+    // o uno externo standalone) calcule la asignacion y la reporte via persistirResultadoWorker.
     public DepositoDTO gestionarDonacion(String depositoID, String donacionID, String productoID, Integer cantidad) {
         val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
                 .orElseThrow(() -> {
                     erroresNoEncontrado.increment();
                     return new DepositoNoEncontradoException("No existe un deposito con ese ID");
                 });
-        deposito.verificarCantidadValida(cantidad);
+        deposito.verificarCantidad(cantidad);
 
-        val necesidadesMaterialesDTO = donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe(productoID);
-
-        val depositoActualizado = this.asignarOGuardarEnStock(
-                deposito, donacionID, productoID, cantidad, necesidadesMaterialesDTO);
-
+        donacionQueuePublisher.publicar(new DonacionMensajeDTO(depositoID, donacionID, productoID, cantidad));
         donacionesGestionadas.increment();
-        return logisticaDataMapper.toDepositoDTO(depositoActualizado);
+
+        return logisticaDataMapper.toDepositoDTO(deposito);
     }
 
-    private Deposito asignarOGuardarEnStock(
-            Deposito deposito,
+    // Llamado por DonacionQueueListener (worker embebido) o por el endpoint que atiende al
+    // Worker standalone, con la decision YA tomada (ver DecisionDeAsignacion). Esta parte
+    // es la unica que persiste: crea el paquete asignado + Asignacion si corresponde, y
+    // manda el sobrante a stock.
+    public DepositoDTO persistirResultadoWorker(
+            String depositoID,
             String donacionID,
             String productoID,
-            Integer cantidad,
-            List<NecesidadMaterialDTO> necesidadesDisponibles) {
+            String necesidadElegidaID,
+            Integer cantidadAsignada,
+            Integer sobrante) {
+        val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
+                .orElseThrow(() -> {
+                    erroresNoEncontrado.increment();
+                    return new DepositoNoEncontradoException("No existe un deposito con ese ID");
+                });
 
-        if (necesidadesDisponibles.isEmpty()) {
-            return guardarEnStock(deposito, donacionID, productoID, cantidad);
+        if (cantidadAsignada != null && cantidadAsignada > 0) {
+            val paqueteAsignado = logisticaRepository.guardarPaquete(
+                    new Paquete(donacionID, productoID, cantidadAsignada));
+            val asignacion = new Asignacion(
+                    paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
+                    OrigenAsignacionEnum.MATCHMAKING);
+            logisticaRepository.guardarAsignacion(asignacion);
+            matchmakingsEjecutados.increment();
         }
 
-        Algoritmo algoritmoDelDeposito = deposito.getAlgoritmoObj();
-        if (algoritmoDelDeposito == null) {
-            erroresNegocio.increment();
-            throw new AlgoritmoNoConfiguradoException("El depósito no tiene algoritmo configurado");
+        Deposito depositoActualizado = deposito;
+        if (sobrante != null && sobrante > 0) {
+            depositoActualizado = guardarEnStock(deposito, donacionID, productoID, sobrante);
         }
 
-        List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDisponibles.stream()
-                .map(logisticaDataMapper::toNecesidadDeEntidad).toList();
-        val paqueteCandidato = new Paquete(donacionID, productoID, cantidad);
-        val necesidadElegidaModelo = algoritmoDelDeposito.correr(paqueteCandidato, necesidadesDeEntidades);
-        int indice = necesidadesDeEntidades.indexOf(necesidadElegidaModelo);
-        val necesidadElegida = necesidadesDisponibles.get(indice);
-
-        boolean noAlcanza = cantidad < necesidadElegida.cantidadObjetivo();
-        if (noAlcanza && necesidadElegida.tipo() == TipoNecesidadMaterialEnum.RECURRENTE) {
-            val restantes = new ArrayList<>(necesidadesDisponibles);
-            restantes.remove(indice);
-            return asignarOGuardarEnStock(deposito, donacionID, productoID, cantidad, restantes);
-        }
-
-        int cantidadAAsignar = Math.min(cantidad, necesidadElegida.cantidadObjetivo());
-        int sobrante = cantidad - cantidadAAsignar;
-
-        val paqueteAsignado = logisticaRepository.guardarPaquete(
-                new Paquete(donacionID, productoID, cantidadAAsignar));
-        val asignacion = new Asignacion(
-                paqueteAsignado.getId().toString(), necesidadElegida.id(), LocalDateTime.now(), ASIGNADA,
-                OrigenAsignacionEnum.MATCHMAKING);
-        logisticaRepository.guardarAsignacion(asignacion);
-        matchmakingsEjecutados.increment();
-
-        if (sobrante > 0) {
-            return guardarEnStock(deposito, donacionID, productoID, sobrante);
-        }
-        return logisticaRepository.guardarDeposito(deposito);
+        return logisticaDataMapper.toDepositoDTO(depositoActualizado);
     }
 
     private Deposito guardarEnStock(Deposito deposito, String donacionID, String productoID, Integer cantidad) {
