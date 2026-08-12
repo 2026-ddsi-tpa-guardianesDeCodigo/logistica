@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.util.NoSuchElementException;
 
@@ -45,5 +46,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> handleMalformedBody(HttpMessageNotReadableException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body("El cuerpo de la solicitud es inválido o contiene un valor no soportado");
+    }
+
+    // Cualquier llamada a Donaciones o Donadores y Entidades que devuelva un error (ej. un
+    // donacionID inexistente, o el servicio caido) termina aca en vez de tirar un 500 pelado.
+    @ExceptionHandler(RestClientResponseException.class)
+    public ResponseEntity<String> handleDownstreamError(RestClientResponseException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body("Fallo un servicio externo (" + e.getStatusCode() + "): " + e.getResponseBodyAsString());
     }
 }
