@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.NoSuchElementException;
@@ -54,5 +55,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<String> handleDownstreamError(RestClientResponseException e) {
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body("Fallo un servicio externo (" + e.getStatusCode() + "): " + e.getResponseBodyAsString());
+    }
+
+    // A diferencia de RestClientResponseException (el downstream respondió con un error),
+    // esto es cuando el downstream ni siquiera es alcanzable (caído, timeout, DNS, etc).
+    @ExceptionHandler(ResourceAccessException.class)
+    public ResponseEntity<String> handleDownstreamUnreachable(ResourceAccessException e) {
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body("Un servicio externo no está disponible: " + e.getMessage());
     }
 }

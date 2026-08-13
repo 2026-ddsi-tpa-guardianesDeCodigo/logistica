@@ -106,6 +106,9 @@ public class LogisticaService {
         if (depositoDTO.capacidadMaxima() == null)
             throw new IllegalArgumentException("La capacidad maximma es obligatoria");
 
+        if (depositoDTO.capacidadMaxima() <= 0)
+            throw new IllegalArgumentException("La capacidad maxima debe ser mayor a cero");
+
         if (depositoDTO.id() != null && logisticaRepository.buscarDepositoPorID(depositoDTO.id()).isPresent())
             throw new DepositoYaExistenteException("Ya existe un deposito con ese ID");
 
@@ -165,6 +168,12 @@ public class LogisticaService {
             String necesidadElegidaID,
             Integer cantidadAsignada,
             Integer sobrante) {
+        if (cantidadAsignada != null && cantidadAsignada < 0)
+            throw new CantidadDeProductoInvalida("La cantidad asignada no puede ser negativa");
+
+        if (sobrante != null && sobrante < 0)
+            throw new CantidadDeProductoInvalida("El sobrante no puede ser negativo");
+
         val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
                 .orElseThrow(() -> {
                     erroresNoEncontrado.increment();
