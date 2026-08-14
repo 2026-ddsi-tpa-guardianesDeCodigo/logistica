@@ -7,6 +7,8 @@ import ar.edu.utn.dds.k3003.model.DecisionDeAsignacion;
 import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.model.DonacionMensajeDTO;
 import ar.edu.utn.dds.k3003.repositories.LogisticaRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,14 +31,24 @@ public class DonacionQueueListener {
     private final LogisticaRepository logisticaRepository;
     private final DonadoresYEntidadesClient donadoresYEntidadesClient;
     private final LogisticaService logisticaService;
+    private final Timer tiempoMatchmaking;
 
     public DonacionQueueListener(
             LogisticaRepository logisticaRepository,
             DonadoresYEntidadesClient donadoresYEntidadesClient,
-            LogisticaService logisticaService) {
+            LogisticaService logisticaService,
+            MeterRegistry meterRegistry) {
         this.logisticaRepository = logisticaRepository;
         this.donadoresYEntidadesClient = donadoresYEntidadesClient;
         this.logisticaService = logisticaService;
+        // Mismo nombre+tag que si se registrara en otro lado: Micrometer no duplica el
+        // meter, devuelve la instancia ya registrada. Este es el unico lugar del proceso
+        // principal donde realmente corre el algoritmo de matchmaking (DecisionDeAsignacion),
+        // a diferencia de persistirResultadoWorker, que solo persiste una decision ya tomada.
+        this.tiempoMatchmaking = Timer.builder("logistica.matchmaking.tiempo")
+                .description("Tiempo de ejecución del matchmaking")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
     }
 
     // Si esto tira sin capturar, Spring AMQP no hace ack y reintenta el mensaje indefinidamente
@@ -52,8 +64,8 @@ public class DonacionQueueListener {
             List<NecesidadMaterialDTO> necesidades =
                     donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe(mensaje.productoID());
 
-            DecisionDeAsignacion.Decision decision = DecisionDeAsignacion.decidir(
-                    deposito.getAlgoritmoObj(), mensaje.productoID(), mensaje.cantidad(), necesidades);
+            DecisionDeAsignacion.Decision decision = tiempoMatchmaking.record(() -> DecisionDeAsignacion.decidir(
+                    deposito.getAlgoritmoObj(), mensaje.productoID(), mensaje.cantidad(), necesidades));
 
             logisticaService.persistirResultadoWorker(
                     mensaje.depositoID(),

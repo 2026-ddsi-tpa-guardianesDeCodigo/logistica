@@ -10,7 +10,6 @@ import ar.edu.utn.dds.k3003.repositories.*;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
 import lombok.val;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +42,6 @@ public class LogisticaService {
     private final Counter erroresNegocio;
     private final Counter asignacionesSolicitudDirecta;
     private final Counter depositosCapacidadExcedida;
-    private final Timer tiempoMatchmaking;
 
     public LogisticaService(
             LogisticaRepository logisticaRepository,
@@ -88,11 +86,6 @@ public class LogisticaService {
 
         this.erroresNegocio = Counter.builder("logistica.errores.negocio")
                 .description("Errores de reglas de negocio (algoritmo no configurado, donaciÃ³n parcial, etc)")
-                .tag("componente", "logistica")
-                .register(meterRegistry);
-
-        this.tiempoMatchmaking = Timer.builder("logistica.matchmaking.tiempo")
-                .description("Tiempo de ejecuciÃ³n del matchmaking")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
@@ -184,39 +177,42 @@ public class LogisticaService {
             String necesidadElegidaID,
             Integer cantidadAsignada,
             Integer sobrante) {
-        // Instrumentado aca (y no en ejecutarMatchmaking) porque este es el metodo que
-        // realmente corre en produccion: lo llaman tanto el worker embebido como, via HTTP,
-        // el worker standalone. ejecutarMatchmaking no tiene ningun endpoint que lo dispare.
-        return tiempoMatchmaking.record(() -> {
-            if (cantidadAsignada != null && cantidadAsignada < 0)
-                throw new CantidadDeProductoInvalida("La cantidad asignada no puede ser negativa");
+        if (cantidadAsignada != null && cantidadAsignada < 0)
+            throw new CantidadDeProductoInvalida("La cantidad asignada no puede ser negativa");
 
-            if (sobrante != null && sobrante < 0)
-                throw new CantidadDeProductoInvalida("El sobrante no puede ser negativo");
+        if (sobrante != null && sobrante < 0)
+            throw new CantidadDeProductoInvalida("El sobrante no puede ser negativo");
 
-            val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
-                    .orElseThrow(() -> {
-                        erroresNoEncontrado.increment();
-                        return new DepositoNoEncontradoException("No existe un deposito con ese ID");
-                    });
+        val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
+                .orElseThrow(() -> {
+                    erroresNoEncontrado.increment();
+                    return new DepositoNoEncontradoException("No existe un deposito con ese ID");
+                });
 
-            if (cantidadAsignada != null && cantidadAsignada > 0) {
-                val paqueteAsignado = logisticaRepository.guardarPaquete(
-                        new Paquete(donacionID, productoID, cantidadAsignada));
-                val asignacion = new Asignacion(
-                        paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
-                        OrigenAsignacionEnum.MATCHMAKING);
-                logisticaRepository.guardarAsignacion(asignacion);
-                matchmakingsEjecutados.increment();
-            }
+        boolean huboAsignacion = cantidadAsignada != null && cantidadAsignada > 0;
+        if (huboAsignacion) {
+            val paqueteAsignado = logisticaRepository.guardarPaquete(
+                    new Paquete(donacionID, productoID, cantidadAsignada));
+            val asignacion = new Asignacion(
+                    paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
+                    OrigenAsignacionEnum.MATCHMAKING);
+            logisticaRepository.guardarAsignacion(asignacion);
+        }
 
-            Deposito depositoActualizado = deposito;
-            if (sobrante != null && sobrante > 0) {
-                depositoActualizado = guardarEnStock(deposito, donacionID, productoID, sobrante);
-            }
+        Deposito depositoActualizado = deposito;
+        if (sobrante != null && sobrante > 0) {
+            depositoActualizado = guardarEnStock(deposito, donacionID, productoID, sobrante);
+        }
 
-            return logisticaDataMapper.toDepositoDTO(depositoActualizado);
-        });
+        // Recien aca, con todo lo persistido sin que se haya tirado ninguna excepcion, contamos
+        // el matchmaking como exitoso. Si guardarEnStock tira DepositoLleno, el metodo nunca
+        // llega a esta linea (y el @Transactional revierte los guardarPaquete/guardarAsignacion
+        // de arriba) - asi el contador no queda desincronizado del estado real de la base.
+        if (huboAsignacion) {
+            matchmakingsEjecutados.increment();
+        }
+
+        return logisticaDataMapper.toDepositoDTO(depositoActualizado);
     }
 
     private Deposito guardarEnStock(Deposito deposito, String donacionID, String productoID, Integer cantidad) {
