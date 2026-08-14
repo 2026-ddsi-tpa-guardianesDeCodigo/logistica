@@ -69,20 +69,12 @@ public class Fachada implements FachadaLogistica {
     // se usa DonacionesClient
   }
 
-  public AsignacionDTO agregarAsignacion(AsignacionDTO asignacionDTO) {
-    return logisticaService.agregarAsignacion(asignacionDTO);
-  }
-
   public DepositoDTO borrarDeposito(String depositoID) {
     return logisticaService.borrarDeposito(depositoID);
   }
 
   public AsignacionDTO buscarAsignacionPorID(String asignacionID) {
     return logisticaService.buscarAsignacionPorID(asignacionID);
-  }
-
-  public PaqueteDTO buscarPaquetePorID(String paqueteID) {
-    return logisticaService.buscarPaquetePorID(paqueteID);
   }
 
   public List<DepositoDTO> obtenerTodosLosDepositos() {

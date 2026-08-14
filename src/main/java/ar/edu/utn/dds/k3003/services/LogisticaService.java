@@ -3,7 +3,6 @@ package ar.edu.utn.dds.k3003.services;
 import ar.edu.utn.dds.k3003.clients.DonacionesClient;
 import ar.edu.utn.dds.k3003.clients.DonadoresYEntidadesClient;
 import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.NecesidadMaterialDTO;
-import ar.edu.utn.dds.k3003.catedra.dtos.donadoresYEntidades.TipoNecesidadMaterialEnum;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.*;
 import ar.edu.utn.dds.k3003.exceptions.*;
 import ar.edu.utn.dds.k3003.model.*;
@@ -161,6 +160,7 @@ public class LogisticaService {
     // Worker standalone, con la decision YA tomada (ver DecisionDeAsignacion). Esta parte
     // es la unica que persiste: crea el paquete asignado + Asignacion si corresponde, y
     // manda el sobrante a stock.
+    @Transactional
     public DepositoDTO persistirResultadoWorker(
             String depositoID,
             String donacionID,
@@ -231,19 +231,16 @@ public class LogisticaService {
                 erroresNegocio.increment();
                 throw new AlgoritmoNoConfiguradoException("El depÃ³sito no tiene algoritmo configurado");
             }
-            List<NecesidadMaterial> necesidadesDeEntidades = necesidadesDTO.stream()
-                    .map(logisticaDataMapper::toNecesidadDeEntidad).toList();
-            val paquete = logisticaDataMapper.toPaquete(paqueteDTO);
-            val necesidadElegida = algoritmoDelDeposito.correr(paquete, necesidadesDeEntidades);
-            int indice = necesidadesDeEntidades.indexOf(necesidadElegida);
-            val necesidadElegidaDTO = necesidadesDTO.get(indice);
-            if (necesidadElegidaDTO.tipo() == TipoNecesidadMaterialEnum.RECURRENTE
-                    && paquete.getCantidad() < necesidadElegidaDTO.cantidadObjetivo()) {
+            // Misma logica de skip-and-retry para necesidades recurrentes insuficientes que usa
+            // el flujo async real (DecisionDeAsignacion), para no divergir de ese comportamiento.
+            DecisionDeAsignacion.Decision decision = DecisionDeAsignacion.decidir(
+                    algoritmoDelDeposito, paqueteDTO.producto(), paqueteDTO.cantidad(), necesidadesDTO);
+            if (decision.necesidadElegidaID() == null) {
                 erroresNegocio.increment();
-                throw new DonacionParcialNoPermitida("Las necesidades recurrentes no admiten donaciones parciales");
+                throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
             }
-            val asignacion = new Asignacion(paqueteDTO.id(), necesidadElegidaDTO.id(), LocalDateTime.now(), ASIGNADA,
-                    OrigenAsignacionEnum.MATCHMAKING);
+            val asignacion = new Asignacion(paqueteDTO.id(), decision.necesidadElegidaID(), LocalDateTime.now(),
+                    ASIGNADA, OrigenAsignacionEnum.MATCHMAKING);
             val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
             matchmakingsEjecutados.increment();
             return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
@@ -261,14 +258,6 @@ public class LogisticaService {
         donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
         logisticaRepository.actualizarEstadoAsignacion(asignacionDTO.id(), COMPLETADA);
         entregasReportadas.increment();
-    }
-
-    public AsignacionDTO agregarAsignacion(AsignacionDTO asignacionDTO) {
-        if (asignacionDTO.id() != null && logisticaRepository.buscarAsignacionPorID(asignacionDTO.id()).isPresent())
-            throw new AsignacionYaExistenteException("Ya existe una asignacion con ese ID");
-        val nuevaAsignacion = logisticaDataMapper.toAsignacion(asignacionDTO);
-        val asignacionGuardada = logisticaRepository.guardarAsignacion(nuevaAsignacion);
-        return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
     }
 
     public DepositoDTO borrarDeposito(String depositoID) {
@@ -289,18 +278,6 @@ public class LogisticaService {
                     return new AsignacionNoEncontrada("No existe una asignacion con ese ID");
                 });
         return logisticaDataMapper.toAsignacionDTO(asignacion);
-    }
-
-    public PaqueteDTO buscarPaquetePorID(String paqueteID) {
-        return logisticaRepository.obtenerTodosLosDepositos().stream()
-                .flatMap(deposito -> deposito.getStockActual().stream())
-                .filter(paquete -> paquete.getId().toString().equals(paqueteID))
-                .map(logisticaDataMapper::toPaqueteDTO)
-                .findFirst()
-                .orElseThrow(() -> {
-                    erroresNoEncontrado.increment();
-                    return new RuntimeException("No existe un paquete con ese ID");
-                });
     }
 
     public List<DepositoDTO> obtenerTodosLosDepositos() {

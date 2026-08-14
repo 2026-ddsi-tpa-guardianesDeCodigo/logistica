@@ -13,6 +13,8 @@ tags:
     description: Registro de entregas de paquetes
   - name: Administración
     description: Operaciones administrativas
+  - name: Stock
+    description: Consulta y consumo de stock disponible (usado por Donadores y Entidades al crear una necesidad)
 
 paths:
 
@@ -267,6 +269,66 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               example: "No existe un paquete con ese ID"
 
+  /stock:
+    get:
+      tags: [Stock]
+      summary: Consultar stock disponible de un producto
+      description: |
+        Suma la cantidad disponible de un producto en stock (paquetes no asignados a ninguna
+        necesidad) a través de todos los depósitos. Devuelve `cantidadDisponible: 0` si no hay
+        stock, no es un error.
+      parameters:
+        - name: productoID
+          in: query
+          required: true
+          description: ID del producto a consultar
+          schema:
+            type: string
+          example: "prod-001"
+      responses:
+        '200':
+          description: Stock disponible consultado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockDisponibleDTO'
+
+  /stock/consumo:
+    post:
+      tags: [Stock]
+      summary: Consumir stock disponible para una necesidad
+      description: |
+        Descuenta stock disponible (FIFO entre los paquetes existentes, pudiendo repartirse
+        entre varios) para cubrir una necesidad material, generando una asignación por cada
+        porción tomada con `origen: SOLICITUD_DIRECTA` (a diferencia de las asignaciones del
+        matchmaking automático, con `origen: MATCHMAKING`). Pensado para ser llamado por
+        Donadores y Entidades al crear una nueva necesidad. Si no hay stock suficiente, cubre
+        lo que haya y devuelve `cantidadAsignada` menor a lo pedido — no es un error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsumoStockRequestDTO'
+            example:
+              productoID: "prod-001"
+              necesidadID: "nec-001"
+              cantidadNecesaria: 5
+      responses:
+        '200':
+          description: Consumo de stock procesado exitosamente (puede ser parcial o cero)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsumoStockResponseDTO'
+        '400':
+          description: Cantidad necesaria inválida (nula o menor a 1)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example: "La cantidad necesaria debe ser mayor o igual a 1"
+
   /limpiarBase:
     delete:
       tags: [Administración]
@@ -369,6 +431,62 @@ components:
           example: "2025-06-01T14:30:00"
         estado:
           $ref: '#/components/schemas/EstadoAsginacionEnum'
+        origen:
+          $ref: '#/components/schemas/OrigenAsignacionEnum'
+
+    StockDisponibleDTO:
+      type: object
+      description: Cantidad disponible en stock de un producto, sumada entre todos los depósitos
+      properties:
+        productoID:
+          type: string
+          example: "prod-001"
+        cantidadDisponible:
+          type: integer
+          example: 15
+
+    ConsumoStockRequestDTO:
+      type: object
+      description: Datos para consumir stock disponible y asignarlo a una necesidad
+      properties:
+        productoID:
+          type: string
+          example: "prod-001"
+        necesidadID:
+          type: string
+          example: "nec-001"
+        cantidadNecesaria:
+          type: integer
+          example: 5
+      required:
+        - productoID
+        - necesidadID
+        - cantidadNecesaria
+
+    ConsumoStockResponseDTO:
+      type: object
+      description: Resultado del consumo de stock (puede ser parcial si no había suficiente)
+      properties:
+        cantidadAsignada:
+          type: integer
+          description: Cantidad efectivamente cubierta con stock (puede ser menor a la pedida)
+          example: 5
+        asignaciones:
+          type: array
+          description: Una asignación por cada porción de stock tomada (origen SOLICITUD_DIRECTA)
+          items:
+            $ref: '#/components/schemas/AsignacionDTO'
+
+    OrigenAsignacionEnum:
+      type: string
+      description: |
+        Origen de una asignación:
+        - `MATCHMAKING`: generada por el algoritmo de matchmaking al recibir una donación
+        - `SOLICITUD_DIRECTA`: generada por consumo directo de stock (endpoint `/stock/consumo`)
+      enum:
+        - MATCHMAKING
+        - SOLICITUD_DIRECTA
+      example: "MATCHMAKING"
 
     GestionDonacionRequestDTO:
       type: object
