@@ -8,6 +8,7 @@ import ar.edu.utn.dds.k3003.exceptions.*;
 import ar.edu.utn.dds.k3003.model.*;
 import ar.edu.utn.dds.k3003.repositories.*;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import lombok.val;
@@ -41,6 +42,7 @@ public class LogisticaService {
     private final Counter erroresNoEncontrado;
     private final Counter erroresNegocio;
     private final Counter asignacionesSolicitudDirecta;
+    private final Counter depositosCapacidadExcedida;
     private final Timer tiempoMatchmaking;
 
     public LogisticaService(
@@ -98,6 +100,20 @@ public class LogisticaService {
                 .description("Cantidad de asignaciones hechas por consumo directo de stock")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
+
+        this.depositosCapacidadExcedida = Counter.builder("logistica.depositos.capacidad_excedida")
+                .description("Intentos de guardar mas stock del que permite la capacidad del deposito")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
+
+        Gauge.builder("logistica.stock.unidades_totales", logisticaRepository,
+                        repo -> repo.obtenerTodosLosDepositos().stream()
+                                .flatMap(d -> d.getStockActual().stream())
+                                .mapToInt(Paquete::getCantidad)
+                                .sum())
+                .description("Unidades totales en stock, sumadas entre todos los depositos")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
     }
 
     public DepositoDTO agregarDeposito(DepositoDTO depositoDTO) {
@@ -148,7 +164,7 @@ public class LogisticaService {
                     erroresNoEncontrado.increment();
                     return new DepositoNoEncontradoException("No existe un deposito con ese ID");
                 });
-        deposito.verificarCantidad(cantidad);
+        verificarCapacidad(deposito, cantidad);
 
         donacionQueuePublisher.publicar(new DonacionMensajeDTO(depositoID, donacionID, productoID, cantidad));
         donacionesGestionadas.increment();
@@ -168,40 +184,57 @@ public class LogisticaService {
             String necesidadElegidaID,
             Integer cantidadAsignada,
             Integer sobrante) {
-        if (cantidadAsignada != null && cantidadAsignada < 0)
-            throw new CantidadDeProductoInvalida("La cantidad asignada no puede ser negativa");
+        // Instrumentado aca (y no en ejecutarMatchmaking) porque este es el metodo que
+        // realmente corre en produccion: lo llaman tanto el worker embebido como, via HTTP,
+        // el worker standalone. ejecutarMatchmaking no tiene ningun endpoint que lo dispare.
+        return tiempoMatchmaking.record(() -> {
+            if (cantidadAsignada != null && cantidadAsignada < 0)
+                throw new CantidadDeProductoInvalida("La cantidad asignada no puede ser negativa");
 
-        if (sobrante != null && sobrante < 0)
-            throw new CantidadDeProductoInvalida("El sobrante no puede ser negativo");
+            if (sobrante != null && sobrante < 0)
+                throw new CantidadDeProductoInvalida("El sobrante no puede ser negativo");
 
-        val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
-                .orElseThrow(() -> {
-                    erroresNoEncontrado.increment();
-                    return new DepositoNoEncontradoException("No existe un deposito con ese ID");
-                });
+            val deposito = logisticaRepository.buscarDepositoPorID(depositoID)
+                    .orElseThrow(() -> {
+                        erroresNoEncontrado.increment();
+                        return new DepositoNoEncontradoException("No existe un deposito con ese ID");
+                    });
 
-        if (cantidadAsignada != null && cantidadAsignada > 0) {
-            val paqueteAsignado = logisticaRepository.guardarPaquete(
-                    new Paquete(donacionID, productoID, cantidadAsignada));
-            val asignacion = new Asignacion(
-                    paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
-                    OrigenAsignacionEnum.MATCHMAKING);
-            logisticaRepository.guardarAsignacion(asignacion);
-            matchmakingsEjecutados.increment();
-        }
+            if (cantidadAsignada != null && cantidadAsignada > 0) {
+                val paqueteAsignado = logisticaRepository.guardarPaquete(
+                        new Paquete(donacionID, productoID, cantidadAsignada));
+                val asignacion = new Asignacion(
+                        paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
+                        OrigenAsignacionEnum.MATCHMAKING);
+                logisticaRepository.guardarAsignacion(asignacion);
+                matchmakingsEjecutados.increment();
+            }
 
-        Deposito depositoActualizado = deposito;
-        if (sobrante != null && sobrante > 0) {
-            depositoActualizado = guardarEnStock(deposito, donacionID, productoID, sobrante);
-        }
+            Deposito depositoActualizado = deposito;
+            if (sobrante != null && sobrante > 0) {
+                depositoActualizado = guardarEnStock(deposito, donacionID, productoID, sobrante);
+            }
 
-        return logisticaDataMapper.toDepositoDTO(depositoActualizado);
+            return logisticaDataMapper.toDepositoDTO(depositoActualizado);
+        });
     }
 
     private Deposito guardarEnStock(Deposito deposito, String donacionID, String productoID, Integer cantidad) {
-        deposito.verificarCantidad(cantidad);
+        verificarCapacidad(deposito, cantidad);
         deposito.agregarPaquete(new Paquete(donacionID, productoID, cantidad));
         return logisticaRepository.guardarDeposito(deposito);
+    }
+
+    // Centraliza el chequeo de capacidad para poder instrumentar DepositoLleno con una metrica
+    // propia: es el sintoma visible de la condicion de carrera bajo Workers concurrentes ya
+    // documentada (multiples Workers reservando espacio del mismo deposito sin lock).
+    private void verificarCapacidad(Deposito deposito, Integer cantidad) {
+        try {
+            deposito.verificarCantidad(cantidad);
+        } catch (DepositoLleno e) {
+            depositosCapacidadExcedida.increment();
+            throw e;
+        }
     }
 
     public void setAlgoritmoMM(String depositoID, TipoAlgoritmoEnum tipoAlgoritmo) {
@@ -220,31 +253,29 @@ public class LogisticaService {
     }
 
     public AsignacionDTO ejecutarMatchmaking(String depositoID, PaqueteDTO paqueteDTO, List<NecesidadMaterialDTO> necesidadesDTO) {
-        return tiempoMatchmaking.record(() -> {
-            Deposito deposito = logisticaRepository.buscarDepositoPorID(depositoID)
-                    .orElseThrow(() -> {
-                        erroresNoEncontrado.increment();
-                        return new DepositoNoEncontradoException("No existe un deposito con ese ID");
-                    });
-            Algoritmo algoritmoDelDeposito = deposito.getAlgoritmoObj();
-            if (algoritmoDelDeposito == null) {
-                erroresNegocio.increment();
-                throw new AlgoritmoNoConfiguradoException("El depÃ³sito no tiene algoritmo configurado");
-            }
-            // Misma logica de skip-and-retry para necesidades recurrentes insuficientes que usa
-            // el flujo async real (DecisionDeAsignacion), para no divergir de ese comportamiento.
-            DecisionDeAsignacion.Decision decision = DecisionDeAsignacion.decidir(
-                    algoritmoDelDeposito, paqueteDTO.producto(), paqueteDTO.cantidad(), necesidadesDTO);
-            if (decision.necesidadElegidaID() == null) {
-                erroresNegocio.increment();
-                throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
-            }
-            val asignacion = new Asignacion(paqueteDTO.id(), decision.necesidadElegidaID(), LocalDateTime.now(),
-                    ASIGNADA, OrigenAsignacionEnum.MATCHMAKING);
-            val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
-            matchmakingsEjecutados.increment();
-            return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
-        });
+        Deposito deposito = logisticaRepository.buscarDepositoPorID(depositoID)
+                .orElseThrow(() -> {
+                    erroresNoEncontrado.increment();
+                    return new DepositoNoEncontradoException("No existe un deposito con ese ID");
+                });
+        Algoritmo algoritmoDelDeposito = deposito.getAlgoritmoObj();
+        if (algoritmoDelDeposito == null) {
+            erroresNegocio.increment();
+            throw new AlgoritmoNoConfiguradoException("El depÃ³sito no tiene algoritmo configurado");
+        }
+        // Misma logica de skip-and-retry para necesidades recurrentes insuficientes que usa
+        // el flujo async real (DecisionDeAsignacion), para no divergir de ese comportamiento.
+        DecisionDeAsignacion.Decision decision = DecisionDeAsignacion.decidir(
+                algoritmoDelDeposito, paqueteDTO.producto(), paqueteDTO.cantidad(), necesidadesDTO);
+        if (decision.necesidadElegidaID() == null) {
+            erroresNegocio.increment();
+            throw new NoHayNecesidades("No hay necesidades materiales insatisfechas");
+        }
+        val asignacion = new Asignacion(paqueteDTO.id(), decision.necesidadElegidaID(), LocalDateTime.now(),
+                ASIGNADA, OrigenAsignacionEnum.MATCHMAKING);
+        val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
+        matchmakingsEjecutados.increment();
+        return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
     }
 
     public void reportarEntrega(PaqueteDTO paqueteDTO) {
