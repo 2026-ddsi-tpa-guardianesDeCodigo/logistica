@@ -16,9 +16,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.web.client.RestClientException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -76,6 +78,20 @@ class LogisticaServiceReportarEntregaTest {
         // la segunda llamada no debe haber vuelto a notificar a nadie
         verify(donadoresYEntidadesClient, times(1)).satisfacerNecesidad("necQA", 5);
         verify(donacionesClient, times(1)).cambiarEstadoDeDonacion("donQA", EstadoDonacionEnum.ACEPTADA);
+    }
+
+    @Test
+    void siDonacionesFalla_laEntregaIgualQuedaReportada() {
+        doThrow(new RestClientException("Invalid HTTP method: PATCH"))
+                .when(donacionesClient)
+                .cambiarEstadoDeDonacion("donQA", EstadoDonacionEnum.ACEPTADA);
+
+        logisticaService.reportarEntrega(new PaqueteDTO(paqueteID, "donQA", "prodQA", 5));
+
+        verify(donadoresYEntidadesClient).satisfacerNecesidad("necQA", 5);
+        assertEquals(
+                EstadoAsginacionEnum.COMPLETADA,
+                logisticaService.buscarAsignacionPorPaqueteID(paqueteID).estado());
     }
 
     @Test

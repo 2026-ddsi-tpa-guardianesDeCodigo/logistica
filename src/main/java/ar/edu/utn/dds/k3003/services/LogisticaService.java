@@ -11,6 +11,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.val;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,8 @@ import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.C
 
 @Service
 public class LogisticaService {
+
+    private static final Logger log = LoggerFactory.getLogger(LogisticaService.class);
 
     private final LogisticaRepository logisticaRepository;
     private final DonacionesClient donacionesClient;
@@ -281,10 +285,21 @@ public class LogisticaService {
             throw new EntregaYaReportadaException(
                     "La entrega del paquete " + paqueteDTO.id() + " ya fue reportada anteriormente");
         }
+        // Primero se satisface la necesidad y recien despues se cierra la asignacion, para que
+        // un reintento choque contra EntregaYaReportada en vez de volver a sumar la cantidad.
         donadoresYEntidadesClient.satisfacerNecesidad(asignacionDTO.necesidadID(), paqueteDTO.cantidad());
-        donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
         logisticaRepository.actualizarEstadoAsignacion(asignacionDTO.id(), COMPLETADA);
         entregasReportadas.increment();
+
+        // El aviso a Donaciones va ultimo y no tumba la entrega: la necesidad ya fue satisfecha
+        // y la asignacion ya quedo completada, asi que fallar aca mentiria sobre lo que paso.
+        // Queda logueado para poder reconciliar el estado de la donacion.
+        try {
+            donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
+        } catch (RuntimeException e) {
+            log.warn("Entrega del paquete {} reportada, pero no se pudo pasar la donacion {} a ACEPTADA: {}",
+                    paqueteDTO.id(), paqueteDTO.donacionID(), e.getMessage());
+        }
     }
 
     public DepositoDTO borrarDeposito(String depositoID) {
