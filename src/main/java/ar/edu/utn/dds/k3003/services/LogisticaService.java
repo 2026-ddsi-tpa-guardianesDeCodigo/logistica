@@ -11,8 +11,10 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.val;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import ar.edu.utn.dds.k3003.infra.logging.EventLogger;
+import ar.edu.utn.dds.k3003.infra.logging.EventoLog;
+import ar.edu.utn.dds.k3003.infra.logging.LogFields;
+import ar.edu.utn.dds.k3003.infra.logging.Outcome;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +30,7 @@ import static ar.edu.utn.dds.k3003.catedra.dtos.logistica.EstadoAsginacionEnum.C
 @Service
 public class LogisticaService {
 
-    private static final Logger log = LoggerFactory.getLogger(LogisticaService.class);
+    private static final EventLogger LOG = EventLogger.of(LogisticaService.class);
 
     private final LogisticaRepository logisticaRepository;
     private final DonacionesClient donacionesClient;
@@ -163,6 +165,13 @@ public class LogisticaService {
                 });
         verificarCapacidad(deposito, cantidad);
 
+        LOG.evento(EventoLog.DONACION_RECIBIDA, "Donación recibida")
+                .id(LogFields.DONACION, donacionID)
+                .id(LogFields.DEPOSITO, depositoID)
+                .id(LogFields.PRODUCTO, productoID)
+                .dato(LogFields.CANTIDAD, cantidad)
+                .emitir();
+
         donacionQueuePublisher.publicar(new DonacionMensajeDTO(depositoID, donacionID, productoID, cantidad));
         donacionesGestionadas.increment();
 
@@ -194,13 +203,15 @@ public class LogisticaService {
                 });
 
         boolean huboAsignacion = cantidadAsignada != null && cantidadAsignada > 0;
+        Paquete paqueteAsignado = null;
+        Asignacion asignacionGuardada = null;
         if (huboAsignacion) {
-            val paqueteAsignado = logisticaRepository.guardarPaquete(
+            paqueteAsignado = logisticaRepository.guardarPaquete(
                     new Paquete(donacionID, productoID, cantidadAsignada));
             val asignacion = new Asignacion(
                     paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
                     OrigenAsignacionEnum.MATCHMAKING);
-            logisticaRepository.guardarAsignacion(asignacion);
+            asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
         }
 
         Deposito depositoActualizado = deposito;
@@ -214,6 +225,17 @@ public class LogisticaService {
         // de arriba) - asi el contador no queda desincronizado del estado real de la base.
         if (huboAsignacion) {
             matchmakingsEjecutados.increment();
+            // Los eventos van recién acá, con todo persistido: si guardarEnStock hubiera tirado
+            // DepositoLleno, la transacción se revierte y no habría que haber dicho que se creó nada.
+            LOG.evento(EventoLog.PAQUETE_CREADO, "Paquete creado")
+                    .id(LogFields.PAQUETE, paqueteAsignado.getId())
+                    .id(LogFields.DONACION, donacionID)
+                    .emitir();
+            LOG.evento(EventoLog.ASIGNACION_CREADA, "Asignación creada")
+                    .id(LogFields.ASIGNACION, asignacionGuardada.getId())
+                    .id(LogFields.NECESIDAD, necesidadElegidaID)
+                    .dato("origen", OrigenAsignacionEnum.MATCHMAKING)
+                    .emitir();
         }
 
         return logisticaDataMapper.toDepositoDTO(depositoActualizado);
@@ -222,7 +244,13 @@ public class LogisticaService {
     private Deposito guardarEnStock(Deposito deposito, String donacionID, String productoID, Integer cantidad) {
         verificarCapacidad(deposito, cantidad);
         deposito.agregarPaquete(new Paquete(donacionID, productoID, cantidad));
-        return logisticaRepository.guardarDeposito(deposito);
+        val guardado = logisticaRepository.guardarDeposito(deposito);
+        LOG.evento(EventoLog.STOCK_SOBRANTE_PERSISTIDO, "Sobrante enviado a stock")
+                .id(LogFields.DEPOSITO, deposito.getId())
+                .id(LogFields.DONACION, donacionID)
+                .dato(LogFields.CANTIDAD, cantidad)
+                .emitir();
+        return guardado;
     }
 
     // Centraliza el chequeo de capacidad para poder instrumentar DepositoLleno con una metrica
@@ -233,6 +261,12 @@ public class LogisticaService {
             deposito.verificarCantidad(cantidad);
         } catch (DepositoLleno e) {
             depositosCapacidadExcedida.increment();
+            int ocupado = deposito.getStockActual().stream().mapToInt(Paquete::getCantidad).sum();
+            LOG.evento(EventoLog.DEPOSITO_CAPACIDAD_RECHAZADA, "Depósito sin capacidad para la donación")
+                    .id(LogFields.DEPOSITO, deposito.getId())
+                    .dato(LogFields.CANTIDAD, cantidad)
+                    .dato("disponible", deposito.getCapacidadMaxima() - ocupado)
+                    .outcome(Outcome.FAILURE).warn().emitir();
             throw e;
         }
     }
@@ -247,9 +281,15 @@ public class LogisticaService {
             case SUB_ATENDIDOS -> new PrioridadASubAtendidos();
             case PRIORIDAD_POR_SCORE -> new PrioridadPorScore();
         };
+        val algoritmoAnterior = deposito.getAlgoritmo();
         deposito.setAlgoritmo(tipoAlgoritmo);
         deposito.setAlgoritmoObj(algoritmo);
         logisticaRepository.guardarDeposito(deposito);
+        LOG.evento(EventoLog.DEPOSITO_ALGORITMO_CAMBIADO, "Algoritmo de matchmaking cambiado")
+                .id(LogFields.DEPOSITO, depositoID)
+                .dato(LogFields.EST_ANT, algoritmoAnterior)
+                .dato(LogFields.EST_NUE, tipoAlgoritmo)
+                .emitir();
     }
 
     public AsignacionDTO ejecutarMatchmaking(String depositoID, PaqueteDTO paqueteDTO, List<NecesidadMaterialDTO> necesidadesDTO) {
@@ -275,6 +315,17 @@ public class LogisticaService {
                 ASIGNADA, OrigenAsignacionEnum.MATCHMAKING);
         val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
         matchmakingsEjecutados.increment();
+        LOG.evento(EventoLog.MATCHMAKING_DECIDIDO, "Matchmaking decidido")
+                .dato(LogFields.ALGORITMO, deposito.getAlgoritmo())
+                .id(LogFields.NECESIDAD, decision.necesidadElegidaID())
+                .dato(LogFields.CANTIDAD, decision.cantidadAsignada())
+                .dato("parcial", esParcial(necesidadesDTO, decision))
+                .emitir();
+        LOG.evento(EventoLog.ASIGNACION_CREADA, "Asignación creada")
+                .id(LogFields.ASIGNACION, asignacionGuardada.getId())
+                .id(LogFields.NECESIDAD, decision.necesidadElegidaID())
+                .dato("origen", OrigenAsignacionEnum.MATCHMAKING)
+                .emitir();
         return logisticaDataMapper.toAsignacionDTO(asignacionGuardada);
     }
 
@@ -282,6 +333,11 @@ public class LogisticaService {
         AsignacionDTO asignacionDTO = this.buscarAsignacionPorPaqueteID(paqueteDTO.id());
         if (asignacionDTO.estado() == COMPLETADA) {
             erroresNegocio.increment();
+            LOG.evento(EventoLog.ENTREGA_REPORTADA, "Entrega rechazada")
+                    .id(LogFields.PAQUETE, paqueteDTO.id())
+                    .id(LogFields.NECESIDAD, asignacionDTO.necesidadID())
+                    .dato(LogFields.MOTIVO, "ya_reportada")
+                    .outcome(Outcome.FAILURE).warn().emitir();
             throw new EntregaYaReportadaException(
                     "La entrega del paquete " + paqueteDTO.id() + " ya fue reportada anteriormente");
         }
@@ -294,12 +350,21 @@ public class LogisticaService {
         // El aviso a Donaciones va ultimo y no tumba la entrega: la necesidad ya fue satisfecha
         // y la asignacion ya quedo completada, asi que fallar aca mentiria sobre lo que paso.
         // Queda logueado para poder reconciliar el estado de la donacion.
+        boolean donacionesRespondio = true;
         try {
             donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
         } catch (RuntimeException e) {
-            log.warn("Entrega del paquete {} reportada, pero no se pudo pasar la donacion {} a ACEPTADA: {}",
-                    paqueteDTO.id(), paqueteDTO.donacionID(), e.getMessage());
+            // El WARN de la llamada fallida ya lo emitió el interceptor; acá solo se marca el
+            // evento de negocio como degradado, para poder reconciliar el estado de la donación.
+            donacionesRespondio = false;
         }
+
+        LOG.evento(EventoLog.ENTREGA_REPORTADA, "Entrega reportada")
+                .id(LogFields.PAQUETE, paqueteDTO.id())
+                .id(LogFields.NECESIDAD, asignacionDTO.necesidadID())
+                .id(LogFields.DONACION, paqueteDTO.donacionID())
+                .outcome(donacionesRespondio ? Outcome.SUCCESS : Outcome.DEGRADED)
+                .emitir();
     }
 
     public DepositoDTO borrarDeposito(String depositoID) {
@@ -332,6 +397,18 @@ public class LogisticaService {
                 .map(logisticaDataMapper::toAsignacionDTO).toList();
     }
 
+    /** La donación cubre solo una parte de lo que la necesidad elegida pide (cantidad asignada < objetivo). */
+    public static boolean esParcial(List<NecesidadMaterialDTO> necesidades, DecisionDeAsignacion.Decision decision) {
+        if (decision.necesidadElegidaID() == null || necesidades == null) {
+            return false;
+        }
+        return necesidades.stream()
+                .filter(n -> decision.necesidadElegidaID().equals(n.id()))
+                .findFirst()
+                .map(n -> n.cantidadObjetivo() != null && decision.cantidadAsignada() < n.cantidadObjetivo())
+                .orElse(false);
+    }
+
     public void limpiarBaseDeDatos() {
         logisticaRepository.limpiarAsignaciones();
         logisticaRepository.limpiarDepositos();
@@ -341,6 +418,10 @@ public class LogisticaService {
         int cantidadDisponible = logisticaRepository.buscarPaquetesEnStockPorProducto(productoID).stream()
                 .mapToInt(Paquete::getCantidad)
                 .sum();
+        LOG.evento(EventoLog.STOCK_CONSULTADO, "Stock consultado")
+                .id(LogFields.PRODUCTO, productoID)
+                .dato("disponible", cantidadDisponible)
+                .emitir();
         return new StockDisponibleDTO(productoID, cantidadDisponible);
     }
 
@@ -375,9 +456,24 @@ public class LogisticaService {
             val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
             asignaciones.add(logisticaDataMapper.toAsignacionDTO(asignacionGuardada));
             asignacionesSolicitudDirecta.increment();
+            LOG.evento(EventoLog.PAQUETE_CREADO, "Paquete creado")
+                    .id(LogFields.PAQUETE, paqueteAsignado.getId())
+                    .id(LogFields.DONACION, paquete.getDonacionID())
+                    .emitir();
+            LOG.evento(EventoLog.ASIGNACION_CREADA, "Asignación creada")
+                    .id(LogFields.ASIGNACION, asignacionGuardada.getId())
+                    .id(LogFields.NECESIDAD, necesidadID)
+                    .dato("origen", OrigenAsignacionEnum.SOLICITUD_DIRECTA)
+                    .emitir();
 
             restante -= tomado;
         }
+
+        LOG.evento(EventoLog.STOCK_CONSUMO_DIRECTO, "Stock consumido para una necesidad")
+                .id(LogFields.PRODUCTO, productoID)
+                .id(LogFields.NECESIDAD, necesidadID)
+                .dato(LogFields.CANTIDAD, cantidadNecesaria - restante)
+                .emitir();
 
         return new ConsumoStockResponseDTO(cantidadNecesaria - restante, asignaciones);
     }

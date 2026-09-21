@@ -1,7 +1,9 @@
 package ar.edu.utn.dds.k3003.clients;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.donaciones.EstadoDonacionEnum;
+import ar.edu.utn.dds.k3003.infra.logging.ClienteHttpLoggingInterceptor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -29,6 +31,7 @@ public class DonacionesClient {
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
                 .requestFactory(requestFactory)
+                .requestInterceptor(new ClienteHttpLoggingInterceptor("donaciones"))
                 .build();
     }
 
@@ -38,6 +41,8 @@ public class DonacionesClient {
                         .path("/donaciones/estado")
                         .queryParam("donacionID", donacionID)
                         .build())
+                // Explícito: con jackson-dataformat-xml en el classpath RestClient serializaría el body como XML.
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(estado)
                 .retrieve()
                 .toBodilessEntity();
