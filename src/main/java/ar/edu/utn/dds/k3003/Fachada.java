@@ -9,6 +9,9 @@ import ar.edu.utn.dds.k3003.model.ConsumoStockRequestDTO;
 import ar.edu.utn.dds.k3003.model.ConsumoStockResponseDTO;
 import ar.edu.utn.dds.k3003.model.StockDisponibleDTO;
 import ar.edu.utn.dds.k3003.model.WorkerResultadoDTO;
+import ar.edu.utn.dds.k3003.infra.logging.EventLogger;
+import ar.edu.utn.dds.k3003.infra.logging.EventoLog;
+import ar.edu.utn.dds.k3003.infra.logging.LogFields;
 import ar.edu.utn.dds.k3003.services.LogisticaService;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +20,8 @@ import java.util.NoSuchElementException;
 
 @Component
 public class Fachada implements FachadaLogistica {
+
+  private static final EventLogger LOG = EventLogger.of(Fachada.class);
 
   private final LogisticaService logisticaService;
 
@@ -98,6 +103,11 @@ public class Fachada implements FachadaLogistica {
   }
 
   public DepositoDTO persistirResultadoWorker(String depositoID, WorkerResultadoDTO resultado) {
+    LOG.evento(EventoLog.WORKER_REPORTE_RECIBIDO, "Reporte de un worker standalone recibido")
+        .id(LogFields.DEPOSITO, depositoID)
+        .id(LogFields.DONACION, resultado.donacionID())
+        .dato("tipo_worker", "standalone")
+        .emitir();
     return logisticaService.persistirResultadoWorker(
         depositoID,
         resultado.donacionID(),
