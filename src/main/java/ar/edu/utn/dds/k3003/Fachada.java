@@ -78,6 +78,18 @@ public class Fachada implements FachadaLogistica {
     return logisticaService.borrarDeposito(depositoID);
   }
 
+  public DepositoDTO editarDeposito(String depositoID, DepositoDTO depositoDTO) {
+    return logisticaService.editarDeposito(depositoID, depositoDTO);
+  }
+
+  public List<PaqueteDTO> consultarStockDeDeposito(String depositoID) {
+    return logisticaService.consultarStockDeDeposito(depositoID);
+  }
+
+  public List<AsignacionDTO> listarEntregas() {
+    return logisticaService.listarEntregas();
+  }
+
   public AsignacionDTO buscarAsignacionPorID(String asignacionID) {
     return logisticaService.buscarAsignacionPorID(asignacionID);
   }
