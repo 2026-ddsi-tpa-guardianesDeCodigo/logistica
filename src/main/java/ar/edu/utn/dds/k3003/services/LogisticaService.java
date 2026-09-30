@@ -49,6 +49,7 @@ public class LogisticaService {
     private final Counter asignacionesSolicitudDirecta;
     private final Counter depositosCapacidadExcedida;
     private final Counter donacionesNoActualizadas;
+    private final Counter compromisosNoNotificados;
 
     public LogisticaService(
             LogisticaRepository logisticaRepository,
@@ -109,6 +110,12 @@ public class LogisticaService {
         this.donacionesNoActualizadas = Counter.builder("logistica.entregas.donacion_no_actualizada")
                 .description("Entregas reportadas (necesidad satisfecha, asignacion completada) donde "
                         + "Donaciones no pudo pasar la donacion a ACEPTADA ni con el reintento")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
+
+        this.compromisosNoNotificados = Counter.builder("logistica.matchmaking.compromiso_no_notificado")
+                .description("Asignaciones por matchmaking creadas donde Donadores no pudo enterarse "
+                        + "del compromiso ni con el reintento: la necesidad puede sobre-asignarse")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
@@ -260,9 +267,47 @@ public class LogisticaService {
                     .id(LogFields.NECESIDAD, necesidadElegidaID)
                     .dato("origen", OrigenAsignacionEnum.MATCHMAKING)
                     .emitir();
+
+            // Le avisa a Donadores que estas unidades quedaron reservadas para la necesidad, así
+            // deja de figurar como insatisfecha y no se le sigue asignando de más (docs/coherencia-
+            // necesidades_v1.md del repo de Donadores). No revierte lo ya persistido si falla: la
+            // asignación es real, esto es solo la notificación.
+            boolean donadoresRespondio = comprometerConReintento(necesidadElegidaID, cantidadAsignada);
+            LOG.evento(EventoLog.NECESIDAD_COMPROMETIDA, "Compromiso de necesidad notificado")
+                    .id(LogFields.NECESIDAD, necesidadElegidaID)
+                    .dato(LogFields.CANTIDAD, cantidadAsignada)
+                    .outcome(donadoresRespondio ? Outcome.SUCCESS : Outcome.DEGRADED)
+                    .emitir();
         }
 
         return logisticaDataMapper.toDepositoDTO(depositoActualizado);
+    }
+
+    // Mismo patrón que avisarleADonacionesConReintento: un reintento simple para absorber una
+    // falla transitoria sin tumbar el matchmaking (que ya persistió). No cubre un cold start de
+    // Render (30-90s) - logistica.matchmaking.compromiso_no_notificado > 0 es la señal de que
+    // hay compromisos que Donadores nunca se enteró.
+    private boolean comprometerConReintento(String necesidadID, Integer cantidad) {
+        for (int intento = 1; intento <= 2; intento++) {
+            try {
+                donadoresYEntidadesClient.comprometerNecesidad(necesidadID, cantidad);
+                return true;
+            } catch (RuntimeException e) {
+                // El WARN de la llamada fallida ya lo emitió el interceptor.
+                if (intento == 2) {
+                    compromisosNoNotificados.increment();
+                    return false;
+                }
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException interrumpido) {
+                    Thread.currentThread().interrupt();
+                    compromisosNoNotificados.increment();
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     private Deposito guardarEnStock(Deposito deposito, String donacionID, String productoID, Integer cantidad) {
