@@ -81,6 +81,10 @@ public class LogisticaRepository {
         return paquetesRepo.save(paquete);
     }
 
+    public Optional<Paquete> buscarPaquetePorID(String id) {
+        return paquetesRepo.findById(Long.parseLong(id));
+    }
+
     public List<Paquete> buscarPaquetesEnStockPorProducto(String producto) {
         return paquetesRepo.findByProductoAndDepositoIsNotNullOrderByIdAsc(producto);
     }

@@ -48,6 +48,7 @@ public class LogisticaService {
     private final Counter erroresNegocio;
     private final Counter asignacionesSolicitudDirecta;
     private final Counter depositosCapacidadExcedida;
+    private final Counter donacionesNoActualizadas;
 
     public LogisticaService(
             LogisticaRepository logisticaRepository,
@@ -102,6 +103,12 @@ public class LogisticaService {
 
         this.depositosCapacidadExcedida = Counter.builder("logistica.depositos.capacidad_excedida")
                 .description("Intentos de guardar mas stock del que permite la capacidad del deposito")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
+
+        this.donacionesNoActualizadas = Counter.builder("logistica.entregas.donacion_no_actualizada")
+                .description("Entregas reportadas (necesidad satisfecha, asignacion completada) donde "
+                        + "Donaciones no pudo pasar la donacion a ACEPTADA ni con el reintento")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
@@ -341,30 +348,63 @@ public class LogisticaService {
             throw new EntregaYaReportadaException(
                     "La entrega del paquete " + paqueteDTO.id() + " ya fue reportada anteriormente");
         }
+        // donacionID y cantidad se derivan del paquete YA PERSISTIDO, no del body: quien reporta
+        // la entrega (bot, MCP, Postman, un reintento manual) podría mandar valores que no
+        // coincidan con lo que Logística realmente asignó, y son esos los que importan para
+        // satisfacer la necesidad y para avisarle a Donaciones. El id del paquete (paqueteDTO.id())
+        // sí es del cliente: es la clave con la que se identificó la entrega desde el principio.
+        Paquete paquete = logisticaRepository.buscarPaquetePorID(paqueteDTO.id())
+                .orElseThrow(() -> {
+                    erroresNoEncontrado.increment();
+                    return new NoSuchElementException("No existe el paquete con ese ID");
+                });
+
         // Primero se satisface la necesidad y recien despues se cierra la asignacion, para que
         // un reintento choque contra EntregaYaReportada en vez de volver a sumar la cantidad.
-        donadoresYEntidadesClient.satisfacerNecesidad(asignacionDTO.necesidadID(), paqueteDTO.cantidad());
+        donadoresYEntidadesClient.satisfacerNecesidad(asignacionDTO.necesidadID(), paquete.getCantidad());
         logisticaRepository.actualizarEstadoAsignacion(asignacionDTO.id(), COMPLETADA);
         entregasReportadas.increment();
 
         // El aviso a Donaciones va ultimo y no tumba la entrega: la necesidad ya fue satisfecha
         // y la asignacion ya quedo completada, asi que fallar aca mentiria sobre lo que paso.
-        // Queda logueado para poder reconciliar el estado de la donacion.
-        boolean donacionesRespondio = true;
-        try {
-            donacionesClient.cambiarEstadoDeDonacion(paqueteDTO.donacionID(), ACEPTADA);
-        } catch (RuntimeException e) {
-            // El WARN de la llamada fallida ya lo emitió el interceptor; acá solo se marca el
-            // evento de negocio como degradado, para poder reconciliar el estado de la donación.
-            donacionesRespondio = false;
-        }
+        // Queda logueado (y contado en una metrica propia) para poder reconciliar el estado de
+        // la donacion despues.
+        boolean donacionesRespondio = avisarleADonacionesConReintento(paquete.getDonacionID());
 
         LOG.evento(EventoLog.ENTREGA_REPORTADA, "Entrega reportada")
                 .id(LogFields.PAQUETE, paqueteDTO.id())
                 .id(LogFields.NECESIDAD, asignacionDTO.necesidadID())
-                .id(LogFields.DONACION, paqueteDTO.donacionID())
+                .id(LogFields.DONACION, paquete.getDonacionID())
                 .outcome(donacionesRespondio ? Outcome.SUCCESS : Outcome.DEGRADED)
                 .emitir();
+    }
+
+    // Reintento simple (1 vez, con una pausa corta) para absorber una falla transitoria de
+    // Donaciones sin tumbar la entrega. No cubre un cold start de Render (30-90s): para eso
+    // hace falta una reconciliación aparte (endpoint o tarea) que todavía no existe - mientras
+    // tanto, logistica.entregas.donacion_no_actualizada > 0 es la señal de que hay donaciones
+    // que se entregaron pero quedaron sin pasar a ACEPTADA.
+    private boolean avisarleADonacionesConReintento(String donacionID) {
+        for (int intento = 1; intento <= 2; intento++) {
+            try {
+                donacionesClient.cambiarEstadoDeDonacion(donacionID, ACEPTADA);
+                return true;
+            } catch (RuntimeException e) {
+                // El WARN de la llamada fallida ya lo emitió el interceptor.
+                if (intento == 2) {
+                    donacionesNoActualizadas.increment();
+                    return false;
+                }
+                try {
+                    Thread.sleep(1500);
+                } catch (InterruptedException interrumpido) {
+                    Thread.currentThread().interrupt();
+                    donacionesNoActualizadas.increment();
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     public DepositoDTO borrarDeposito(String depositoID) {
