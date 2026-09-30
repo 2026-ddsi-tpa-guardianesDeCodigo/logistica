@@ -15,6 +15,9 @@ public enum EventoLog {
     MENSAJE_PUBLICADO("mensaje.publicado"),
     MENSAJE_CONSUMIDO("mensaje.consumido"),
     MENSAJE_REINTENTADO("mensaje.reintentado"),
+    // Propio de este componente (no está en el catálogo de logging-spec_v1.md §5.4): el
+    // matchmaking falló y la donación entró completa como stock en vez de perderse.
+    MENSAJE_RECUPERADO_A_STOCK("mensaje.recuperado_a_stock"),
     MENSAJE_DESCARTADO("mensaje.descartado"),
     MATCHMAKING_DECIDIDO("matchmaking.decidido"),
     MATCHMAKING_SIN_NECESIDAD("matchmaking.sin_necesidad"),

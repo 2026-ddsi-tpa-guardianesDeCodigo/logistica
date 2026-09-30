@@ -170,6 +170,23 @@ public class LogisticaService {
                     erroresNoEncontrado.increment();
                     return new DepositoNoEncontradoException("No existe un deposito con ese ID");
                 });
+
+        // Sin algoritmo, el worker va a fallar al decidir y la donacion se perderia de forma
+        // asincronica (el mensaje ya consumido, el donante creyendo que entro). Se rechaza de
+        // una, con un mensaje que dice como arreglarlo. Un deposito nace con algoritmo null
+        // (spec E2), asi que configurarlo es parte de ponerlo operativo.
+        if (deposito.getAlgoritmo() == null) {
+            erroresNegocio.increment();
+            LOG.evento(EventoLog.DONACION_RECIBIDA, "Donación rechazada")
+                    .id(LogFields.DONACION, donacionID)
+                    .id(LogFields.DEPOSITO, depositoID)
+                    .dato(LogFields.MOTIVO, "algoritmo_no_configurado")
+                    .outcome(Outcome.FAILURE).warn().emitir();
+            throw new AlgoritmoNoConfiguradoException("El deposito " + depositoID
+                    + " no tiene algoritmo de matchmaking configurado: configurarlo con "
+                    + "PATCH /depositos/" + depositoID + "/algoritmo antes de recibir donaciones");
+        }
+
         verificarCapacidad(deposito, cantidad);
 
         LOG.evento(EventoLog.DONACION_RECIBIDA, "Donación recibida")
