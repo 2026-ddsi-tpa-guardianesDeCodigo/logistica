@@ -52,6 +52,21 @@ public class LogisticaController {
     return ResponseEntity.ok(fachada.borrarDeposito(id));
   }
 
+  @PatchMapping("/depositos/{id}")
+  public ResponseEntity<DepositoDTO> patchDeposito(@PathVariable String id, @RequestBody DepositoDTO depositoDTO) {
+    return ResponseEntity.ok(fachada.editarDeposito(id, depositoDTO));
+  }
+
+  @GetMapping("/depositos/{id}/stock")
+  public ResponseEntity<List<PaqueteDTO>> getStockDeDeposito(@PathVariable String id) {
+    return ResponseEntity.ok(fachada.consultarStockDeDeposito(id));
+  }
+
+  @GetMapping("/entregas")
+  public ResponseEntity<List<AsignacionDTO>> getEntregas() {
+    return ResponseEntity.ok(fachada.listarEntregas());
+  }
+
   @GetMapping("/asignaciones/{id}")
   public ResponseEntity<AsignacionDTO> getAsignacion(@PathVariable String id) {
 

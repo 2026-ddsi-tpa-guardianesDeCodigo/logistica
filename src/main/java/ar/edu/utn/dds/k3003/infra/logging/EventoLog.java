@@ -28,7 +28,8 @@ public enum EventoLog {
     STOCK_CONSUMO_DIRECTO("stock.consumo.directo"),
     ENTREGA_REPORTADA("entrega.reportada"),
     WORKER_REPORTE_RECIBIDO("worker.reporte.recibido"),
-    DEPOSITO_ALGORITMO_CAMBIADO("deposito.algoritmo.cambiado");
+    DEPOSITO_ALGORITMO_CAMBIADO("deposito.algoritmo.cambiado"),
+    DEPOSITO_EDITADO("deposito.editado");
 
     private final String action;
 

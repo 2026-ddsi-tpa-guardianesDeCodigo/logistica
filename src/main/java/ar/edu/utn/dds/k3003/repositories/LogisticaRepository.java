@@ -64,6 +64,10 @@ public class LogisticaRepository {
         return asignacionesRepo.findAll();
     }
 
+    public List<Asignacion> obtenerEntregas() {
+        return asignacionesRepo.findByEstado(EstadoAsginacionEnum.COMPLETADA);
+    }
+
     public Asignacion actualizarEstadoAsignacion(String asignacionID, EstadoAsginacionEnum estado) {
         Asignacion asignacion = asignacionesRepo.findById(Long.parseLong(asignacionID))
                 .orElseThrow(() -> new AsignacionNoEncontrada("No existe la asignación"));
@@ -87,6 +91,10 @@ public class LogisticaRepository {
 
     public List<Paquete> buscarPaquetesEnStockPorProducto(String producto) {
         return paquetesRepo.findByProductoAndDepositoIsNotNullOrderByIdAsc(producto);
+    }
+
+    public List<Paquete> buscarStockDeDeposito(Long depositoId) {
+        return paquetesRepo.findByDeposito_Id(depositoId);
     }
 
     public void eliminarPaquete(Paquete paquete) {

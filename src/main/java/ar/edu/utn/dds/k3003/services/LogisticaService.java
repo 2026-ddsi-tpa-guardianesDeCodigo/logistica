@@ -40,6 +40,7 @@ public class LogisticaService {
 
     // --- MÃ©tricas ---
     private final Counter depositosCreados;
+    private final Counter depositosEditados;
     private final Counter depositosEliminados;
     private final Counter donacionesGestionadas;
     private final Counter matchmakingsEjecutados;
@@ -63,6 +64,11 @@ public class LogisticaService {
 
         this.depositosCreados = Counter.builder("logistica.depositos.creados")
                 .description("Cantidad de depÃ³sitos creados")
+                .tag("componente", "logistica")
+                .register(meterRegistry);
+
+        this.depositosEditados = Counter.builder("logistica.depositos.editados")
+                .description("Cantidad de depÃ³sitos editados")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
@@ -149,6 +155,62 @@ public class LogisticaService {
                     return new DepositoNoEncontradoException("No existe un deposito con ese ID");
                 });
         return logisticaDataMapper.toDepositoDTO(deposito);
+    }
+
+    /**
+     * ABM (E5, A8): edita nombre/dirección/capacidad de un depósito. Semántica de PATCH: solo se
+     * tocan los campos presentes. La capacidad no puede bajar del stock que ya está ocupando el
+     * depósito - reducirla por debajo dejaría el depósito en un estado que su propio
+     * verificarCantidad() ya no podría explicar (más ocupado que su capacidad "máxima").
+     */
+    public DepositoDTO editarDeposito(String depositoID, DepositoDTO dto) {
+        Deposito deposito = logisticaRepository.buscarDepositoPorID(depositoID)
+                .orElseThrow(() -> {
+                    erroresNoEncontrado.increment();
+                    return new DepositoNoEncontradoException("No existe un deposito con ese ID");
+                });
+
+        if (dto.capacidadMaxima() != null) {
+            if (dto.capacidadMaxima() <= 0) {
+                throw new IllegalArgumentException("La capacidad maxima debe ser mayor a cero");
+            }
+            int ocupado = deposito.getStockActual().stream().mapToInt(Paquete::getCantidad).sum();
+            if (dto.capacidadMaxima() < ocupado) {
+                throw new IllegalArgumentException(
+                        "La capacidad no puede ser menor al stock actual (" + ocupado + " unidades ocupadas)");
+            }
+            deposito.setCapacidadMaxima(dto.capacidadMaxima());
+        }
+        if (dto.nombre() != null) deposito.setNombre(dto.nombre());
+        if (dto.direccion() != null) deposito.setDireccion(dto.direccion());
+
+        val depositoGuardado = logisticaRepository.guardarDeposito(deposito);
+        depositosEditados.increment();
+
+        LOG.evento(EventoLog.DEPOSITO_EDITADO, "Depósito editado")
+                .id(LogFields.DEPOSITO, depositoID)
+                .emitir();
+
+        return logisticaDataMapper.toDepositoDTO(depositoGuardado);
+    }
+
+    /** ABM (E5, A8): stock de un depósito puntual, a diferencia de GET /stock que suma entre todos. */
+    public List<PaqueteDTO> consultarStockDeDeposito(String depositoID) {
+        logisticaRepository.buscarDepositoPorID(depositoID)
+                .orElseThrow(() -> {
+                    erroresNoEncontrado.increment();
+                    return new DepositoNoEncontradoException("No existe un deposito con ese ID");
+                });
+        return logisticaRepository.buscarStockDeDeposito(Long.parseLong(depositoID)).stream()
+                .map(logisticaDataMapper::toPaqueteDTO)
+                .toList();
+    }
+
+    /** ABM (E5, A8): entregas reportadas, es decir asignaciones que ya llegaron a COMPLETADA. */
+    public List<AsignacionDTO> listarEntregas() {
+        return logisticaRepository.obtenerEntregas().stream()
+                .map(logisticaDataMapper::toAsignacionDTO)
+                .toList();
     }
 
     public AsignacionDTO buscarAsignacionPorPaqueteID(String paqueteID) throws NoSuchElementException {
