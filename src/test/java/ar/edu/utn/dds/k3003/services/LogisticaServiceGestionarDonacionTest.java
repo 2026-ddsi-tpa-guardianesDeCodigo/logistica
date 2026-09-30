@@ -1,7 +1,9 @@
 package ar.edu.utn.dds.k3003.services;
 
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.DepositoDTO;
+import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.clients.DonacionesClient;
+import ar.edu.utn.dds.k3003.exceptions.AlgoritmoNoConfiguradoException;
 import ar.edu.utn.dds.k3003.clients.DonadoresYEntidadesClient;
 import ar.edu.utn.dds.k3003.model.Deposito;
 import ar.edu.utn.dds.k3003.model.DonacionMensajeDTO;
@@ -47,8 +49,11 @@ class LogisticaServiceGestionarDonacionTest {
     void setUp() {
         logisticaRepository.limpiarAsignaciones();
         logisticaRepository.limpiarDepositos();
-        DepositoDTO deposito = logisticaService.agregarDeposito(
-                new DepositoDTO(null, null, "deposito-test", "direccion", 10, null));
+        // Con algoritmo: recibir donaciones exige tenerlo configurado (ver A5 en CONTEXTO_E5.md).
+        // Sin él, gestionarDonacion rechaza antes de chequear capacidad, y los tests de abajo
+        // pasarían por el motivo equivocado.
+        DepositoDTO deposito = logisticaService.agregarDeposito(new DepositoDTO(
+                null, TipoAlgoritmoEnum.SUB_ATENDIDOS, "deposito-test", "direccion", 10, null));
         depositoID = deposito.id();
     }
 
@@ -70,6 +75,20 @@ class LogisticaServiceGestionarDonacionTest {
 
         assertThrows(
                 RuntimeException.class, () -> logisticaService.gestionarDonacion(depositoID, "don2", "prodX", 5));
+
+        verify(donacionQueuePublisher, never()).publicar(any());
+    }
+
+    @Test
+    void sinAlgoritmoConfigurado_rechazaYNuncaPublica() {
+        DepositoDTO sinAlgoritmo = logisticaService.agregarDeposito(
+                new DepositoDTO(null, null, "deposito-sin-algoritmo", "direccion", 10, null));
+
+        // Antes se encolaba igual y el worker no podia decidir: la donacion se perdia de forma
+        // asincronica, sin que el que dono se enterara.
+        assertThrows(
+                AlgoritmoNoConfiguradoException.class,
+                () -> logisticaService.gestionarDonacion(sinAlgoritmo.id(), "don3", "prodX", 5));
 
         verify(donacionQueuePublisher, never()).publicar(any());
     }

@@ -6,6 +6,7 @@ import ar.edu.utn.dds.k3003.catedra.dtos.logistica.PaqueteDTO;
 import ar.edu.utn.dds.k3003.clients.DonacionesClient;
 import ar.edu.utn.dds.k3003.clients.DonadoresYEntidadesClient;
 import ar.edu.utn.dds.k3003.model.Asignacion;
+import ar.edu.utn.dds.k3003.model.Paquete;
 import ar.edu.utn.dds.k3003.repositories.LogisticaRepository;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,10 +51,14 @@ class GlobalExceptionHandlerIntegrationTest {
     void setUp() {
         logisticaRepository.limpiarAsignaciones();
         logisticaRepository.limpiarDepositos();
+        // reportarEntrega ahora lee donacionID/cantidad del Paquete persistido, no del body
+        // (ver A4 en CONTEXTO_E5.md): hace falta un Paquete real, no solo un id inventado.
+        Paquete paquete = logisticaRepository.guardarPaquete(new Paquete("donInexistente", "prodQA", 5));
+        paqueteID = String.valueOf(paquete.getId());
         Asignacion asignacion = new Asignacion(
-                "paqueteGatewayQA", "necGatewayQA", LocalDateTime.now(),
+                paqueteID, "necGatewayQA", LocalDateTime.now(),
                 EstadoAsginacionEnum.ASIGNADA, OrigenAsignacionEnum.MATCHMAKING);
-        paqueteID = logisticaRepository.guardarAsignacion(asignacion).getPaqueteID();
+        logisticaRepository.guardarAsignacion(asignacion);
     }
 
     @Test

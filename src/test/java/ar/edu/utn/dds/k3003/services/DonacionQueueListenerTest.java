@@ -17,6 +17,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -91,8 +93,11 @@ class DonacionQueueListenerTest {
                 listener.procesar(new DonacionMensajeDTO("id-inexistente", "don3", "prodX", 5)));
     }
 
+    // A5: la donacion no se pierde cuando el matchmaking falla. Tras agotar los reintentos entra
+    // completa como stock del deposito, y queda disponible para /stock/consumo o un matchmaking
+    // posterior. Antes se logueaba el error y la donacion desaparecia del sistema.
     @Test
-    void procesarMensaje_errorConsultandoNecesidades_seLoguaYNoPropagaLaExcepcion() {
+    void procesarMensaje_errorConsultandoNecesidades_laDonacionEntraComoStock() {
         when(donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe("prodError"))
                 .thenThrow(new RuntimeException("Donadores y Entidades no responde"));
 
@@ -100,5 +105,20 @@ class DonacionQueueListenerTest {
                 listener.procesar(new DonacionMensajeDTO(depositoID, "don4", "prodError", 5)));
 
         assertEquals(0, logisticaService.obtenerTodasLasAsignaciones().size());
+        DepositoDTO deposito = logisticaService.buscarDepositoPorID(depositoID);
+        assertEquals(1, deposito.stockActual().size());
+        assertEquals(5, deposito.stockActual().get(0).cantidad());
+        assertEquals("don4", deposito.stockActual().get(0).donacionID());
+    }
+
+    @Test
+    void procesarMensaje_reintentaAntesDeCaerAlFallback() {
+        when(donadoresYEntidadesClient.obtenerNecesidadesInsatisfechasDe("prodError2"))
+                .thenThrow(new RuntimeException("Donadores y Entidades no responde"));
+
+        listener.procesar(new DonacionMensajeDTO(depositoID, "don5", "prodError2", 3));
+
+        // 3 intentos de matchmaking antes del fallback, no uno solo
+        verify(donadoresYEntidadesClient, times(3)).obtenerNecesidadesInsatisfechasDe("prodError2");
     }
 }
