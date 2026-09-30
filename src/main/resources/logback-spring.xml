@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+      Reusamos la config de consola de Spring Boot (respeta logging.pattern.console y
+      logging.structured.format.console=${LOG_FORMAT:} tal cual estaban en application.properties)
+      en vez de redefinirla a mano: escribir un logback-spring.xml propio sin este <include>
+      pisaría el logging ECS/legible que ya funciona en los 4 entornos.
+    -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!--
+      Appender de Better Stack (logs centralizados, docs/logging-spec_v1.md). Solo se activa si
+      existe BETTERSTACK_SOURCE_TOKEN, asi el servicio arranca igual en local sin haberlo configurado.
+
+      - mdcFields=trace.id: el unico campo que CorrelationAndAccessLogFilter pone en el MDC
+        (ver LogFields.TRACE_ID). Llega como campo estructurado y buscable (meta.trace.id en el
+        JSON de Better Stack) - es lo que permite filtrar una llamada de punta a punta cruzando
+        Donaciones -> Donadores -> Logistica -> worker por el mismo id.
+      - encoder con %kvp: LogtailAppender arma el campo "message" con event.getFormattedMessage()
+        por default, que NO incluye los pares clave-valor que EventLogger agrega con addKeyValue()
+        (event.action, donatrack.donador_id, motivo, cantidad, etc.). El pattern de abajo es el
+        mismo %kvp que ya usa logging.pattern.console para consola legible, asi esos campos no se
+        pierden tambien en Better Stack (quedan en el texto del mensaje, buscables por texto
+        completo). %nopex evita duplicar el stacktrace: LogtailAppender ya lo manda aparte,
+        estructurado, en el campo "throwable" cuando el evento tiene una excepcion.
+      - No hay <if> anidado dentro de <root> (Logback no lo soporta, tira warning
+        "IfNestedWithinSecondPhaseElementSC") -> dos bloques <root> completos, uno por rama.
+    -->
+    <if condition='isDefined("BETTERSTACK_SOURCE_TOKEN")'>
+        <then>
+            <appender name="BETTERSTACK" class="com.logtail.logback.LogtailAppender">
+                <appName>${SERVICE_NAME:-logistica}</appName>
+                <sourceToken>${BETTERSTACK_SOURCE_TOKEN}</sourceToken>
+                <ingestUrl>${BETTERSTACK_INGEST_URL:-https://in.logs.betterstack.com}</ingestUrl>
+                <mdcFields>trace.id</mdcFields>
+                <mdcTypes>string</mdcTypes>
+                <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+                    <pattern>%msg %kvp%nopex</pattern>
+                </encoder>
+            </appender>
+            <root level="INFO">
+                <appender-ref ref="CONSOLE"/>
+                <appender-ref ref="BETTERSTACK"/>
+            </root>
+        </then>
+        <else>
+            <root level="INFO">
+                <appender-ref ref="CONSOLE"/>
+            </root>
+        </else>
+    </if>
+
+</configuration>
