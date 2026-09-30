@@ -12,8 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * Parte B: esto es lo que antes hacia la mitad "persistir" de asignarOGuardarEnStock, ahora
@@ -96,5 +102,34 @@ class LogisticaServicePersistirResultadoWorkerTest {
         assertThrows(
                 RuntimeException.class,
                 () -> logisticaService.persistirResultadoWorker("id-inexistente", "don1", "prodX", null, 0, 5));
+    }
+
+    // --- aviso del compromiso a Donadores (docs/coherencia-necesidades_v1.md del repo de Donadores) ---
+
+    @Test
+    void huboAsignacion_avisaAlCompromisoALaNecesidadElegida() {
+        logisticaService.persistirResultadoWorker(depositoID, "don1", "prodX", "nec1", 5, 0);
+
+        verify(donadoresYEntidadesClient).comprometerNecesidad("nec1", 5);
+    }
+
+    @Test
+    void soloSobrante_noHayNecesidadQueComprometer() {
+        logisticaService.persistirResultadoWorker(depositoID, "don1", "prodX", null, 0, 7);
+
+        verify(donadoresYEntidadesClient, never()).comprometerNecesidad(anyString(), anyInt());
+    }
+
+    @Test
+    void fallaElAvisoDelCompromiso_laAsignacionQuedaIgual() {
+        doThrow(new RuntimeException("Donadores no responde"))
+                .when(donadoresYEntidadesClient).comprometerNecesidad(anyString(), anyInt());
+
+        DepositoDTO resultado = assertDoesNotThrow(() ->
+                logisticaService.persistirResultadoWorker(depositoID, "don1", "prodX", "nec1", 5, 0));
+
+        assertEquals(1, logisticaService.obtenerTodasLasAsignaciones().size(),
+                "la asignación ya persistida no se revierte por una notificación que falló");
+        assertEquals(0, resultado.stockActual().size());
     }
 }

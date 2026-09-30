@@ -23,6 +23,10 @@ public enum EventoLog {
     MATCHMAKING_SIN_NECESIDAD("matchmaking.sin_necesidad"),
     PAQUETE_CREADO("paquete.creado"),
     ASIGNACION_CREADA("asignacion.creada"),
+    // Aviso a Donadores de que se comprometieron unidades por matchmaking (docs/coherencia-
+    // necesidades_v1.md del repo de Donadores). outcome=degraded si Donadores no respondió:
+    // la asignación ya quedó persistida, no se revierte por esto.
+    NECESIDAD_COMPROMETIDA("necesidad.comprometida"),
     STOCK_SOBRANTE_PERSISTIDO("stock.sobrante.persistido"),
     STOCK_CONSULTADO("stock.consultado"),
     STOCK_CONSUMO_DIRECTO("stock.consumo.directo"),

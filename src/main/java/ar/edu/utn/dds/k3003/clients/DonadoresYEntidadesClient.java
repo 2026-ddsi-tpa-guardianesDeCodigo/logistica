@@ -49,5 +49,21 @@ public class DonadoresYEntidadesClient {
                 .toBodilessEntity();
     }
 
+    /**
+     * Avisa que se reservaron unidades para una necesidad por matchmaking, antes de que se
+     * reporte su entrega (docs/coherencia-necesidades_v1.md del repo de Donadores). Sin este
+     * aviso, la necesidad sigue figurando como insatisfecha en obtenerNecesidadesInsatisfechasDe
+     * y puede recibir más asignaciones para algo que ya está cubierto.
+     */
+    public void comprometerNecesidad(String necesidadID, Integer cantidad) {
+        restClient.post()
+                .uri("/necesidades/{necesidadID}/compromiso", necesidadID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new CompromisoRequest(cantidad))
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     record SatisfaccionRequest(Integer cantidad) {}
+    record CompromisoRequest(Integer cantidad) {}
 }
