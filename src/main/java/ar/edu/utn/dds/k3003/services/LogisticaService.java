@@ -63,32 +63,32 @@ public class LogisticaService {
         this.donadoresYEntidadesClient = donadoresYEntidadesClient;
         this.donacionQueuePublisher = donacionQueuePublisher;
 
-        this.depositosCreados = Counter.builder("logistica.depositos.creados")
+        this.depositosCreados = Counter.builder("negocio.logistica.depositos.creados")
                 .description("Cantidad de depÃ³sitos creados")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.depositosEditados = Counter.builder("logistica.depositos.editados")
+        this.depositosEditados = Counter.builder("negocio.logistica.depositos.editados")
                 .description("Cantidad de depÃ³sitos editados")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.depositosEliminados = Counter.builder("logistica.depositos.eliminados")
+        this.depositosEliminados = Counter.builder("negocio.logistica.depositos.eliminados")
                 .description("Cantidad de depÃ³sitos eliminados")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.donacionesGestionadas = Counter.builder("logistica.donaciones.gestionadas")
+        this.donacionesGestionadas = Counter.builder("negocio.logistica.donaciones.gestionadas")
                 .description("Cantidad de donaciones gestionadas")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.matchmakingsEjecutados = Counter.builder("logistica.matchmaking.ejecutados")
+        this.matchmakingsEjecutados = Counter.builder("negocio.logistica.matchmaking.ejecutados")
                 .description("Cantidad de matchmakings ejecutados exitosamente")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.entregasReportadas = Counter.builder("logistica.entregas.reportadas")
+        this.entregasReportadas = Counter.builder("negocio.logistica.entregas.reportadas")
                 .description("Cantidad de entregas reportadas")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
@@ -103,12 +103,12 @@ public class LogisticaService {
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.asignacionesSolicitudDirecta = Counter.builder("logistica.asignaciones.solicitud_directa")
+        this.asignacionesSolicitudDirecta = Counter.builder("negocio.logistica.asignaciones.solicitud_directa")
                 .description("Cantidad de asignaciones hechas por consumo directo de stock")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        this.depositosCapacidadExcedida = Counter.builder("logistica.depositos.capacidad_excedida")
+        this.depositosCapacidadExcedida = Counter.builder("negocio.logistica.depositos.capacidad_excedida")
                 .description("Intentos de guardar mas stock del que permite la capacidad del deposito")
                 .tag("componente", "logistica")
                 .register(meterRegistry);
@@ -125,7 +125,7 @@ public class LogisticaService {
                 .tag("componente", "logistica")
                 .register(meterRegistry);
 
-        Gauge.builder("logistica.stock.unidades_totales", logisticaRepository,
+        Gauge.builder("negocio.logistica.stock.unidades_totales", logisticaRepository,
                         repo -> repo.obtenerTodosLosDepositos().stream()
                                 .flatMap(d -> d.getStockActual().stream())
                                 .mapToInt(Paquete::getCantidad)
