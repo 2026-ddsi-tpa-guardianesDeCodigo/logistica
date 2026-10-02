@@ -33,7 +33,10 @@ public enum EventoLog {
     ENTREGA_REPORTADA("entrega.reportada"),
     WORKER_REPORTE_RECIBIDO("worker.reporte.recibido"),
     DEPOSITO_ALGORITMO_CAMBIADO("deposito.algoritmo.cambiado"),
-    DEPOSITO_EDITADO("deposito.editado");
+    DEPOSITO_EDITADO("deposito.editado"),
+    DEPOSITO_CREADO("deposito.creado"),
+    DEPOSITO_BORRADO("deposito.borrado"),
+    LIMPIAR_BASE_EJECUTADO("limpiar_base.ejecutado");
 
     private final String action;
 

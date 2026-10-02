@@ -152,6 +152,11 @@ public class LogisticaService {
         }
         val depositoGuardado = logisticaRepository.guardarDeposito(nuevoDeposito);
         depositosCreados.increment();
+
+        LOG.evento(EventoLog.DEPOSITO_CREADO, "Depósito creado")
+                .id(LogFields.DEPOSITO, depositoGuardado.getId())
+                .emitir();
+
         return logisticaDataMapper.toDepositoDTO(depositoGuardado);
     }
 
@@ -539,6 +544,12 @@ public class LogisticaService {
                 });
         logisticaRepository.eliminarDeposito(depositoID);
         depositosEliminados.increment();
+
+        LOG.evento(EventoLog.DEPOSITO_BORRADO, "Depósito borrado")
+                .id(LogFields.DEPOSITO, depositoID)
+                .warn()
+                .emitir();
+
         return logisticaDataMapper.toDepositoDTO(deposito);
     }
 
@@ -576,6 +587,10 @@ public class LogisticaService {
     public void limpiarBaseDeDatos() {
         logisticaRepository.limpiarAsignaciones();
         logisticaRepository.limpiarDepositos();
+
+        LOG.evento(EventoLog.LIMPIAR_BASE_EJECUTADO, "Base de datos limpiada")
+                .warn()
+                .emitir();
     }
 
     public StockDisponibleDTO consultarStockDisponible(String productoID) {
