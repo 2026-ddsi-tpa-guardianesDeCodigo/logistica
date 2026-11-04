@@ -27,8 +27,9 @@ import static org.mockito.Mockito.doThrow;
 /**
  * A nivel HTTP real (servidor embebido con puerto random), no a nivel service, porque
  * GlobalExceptionHandler solo intercepta excepciones que suben desde un @RestController.
- * Reproduce lo que se vio en vivo contra Render: un donacionID que Donaciones rechaza durante
- * reportarEntrega terminaba en un 500 sin mensaje util.
+ * Se vio en vivo contra Render: un error de un servicio externo durante reportarEntrega terminaba
+ * en un 500 sin mensaje util. Se prueba con Donadores porque un fallo de Donaciones ya no llega
+ * al handler: no tumba la entrega (ver siDonacionesFalla_laEntregaIgualQuedaReportada).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GlobalExceptionHandlerIntegrationTest {
@@ -62,17 +63,17 @@ class GlobalExceptionHandlerIntegrationTest {
     }
 
     @Test
-    void reportarEntrega_donacionesRechazaElCambioDeEstado_devuelve502ConMensajeClaro() {
+    void reportarEntrega_donadoresRechazaLaSatisfaccion_devuelve502ConMensajeClaro() {
         doThrow(HttpClientErrorException.create(
                         HttpStatus.BAD_REQUEST, "Bad Request", null,
-                        "donacion inexistente".getBytes(), null))
-                .when(donacionesClient)
-                .cambiarEstadoDeDonacion(any(), any());
+                        "necesidad inexistente".getBytes(), null))
+                .when(donadoresYEntidadesClient)
+                .satisfacerNecesidad(any(), any());
 
         ResponseEntity<String> response = restTemplate.postForEntity(
                 "/entregas", new PaqueteDTO(paqueteID, "donInexistente", "prodQA", 5), String.class);
 
         assertEquals(HttpStatus.BAD_GATEWAY, response.getStatusCode());
-        assertTrue(response.getBody().contains("donacion inexistente"));
+        assertTrue(response.getBody().contains("necesidad inexistente"));
     }
 }
