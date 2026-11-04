@@ -1,8 +1,10 @@
 package ar.edu.utn.dds.k3003.model;
 
+import ar.edu.utn.dds.k3003.eventos.PublicadorDeCambios;
 import jakarta.persistence.*;
 
 @Entity
+@EntityListeners(PublicadorDeCambios.class)
 @Table(name = "paquetes")
 public class Paquete {
 

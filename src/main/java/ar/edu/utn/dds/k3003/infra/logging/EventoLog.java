@@ -36,7 +36,12 @@ public enum EventoLog {
     DEPOSITO_EDITADO("deposito.editado"),
     DEPOSITO_CREADO("deposito.creado"),
     DEPOSITO_BORRADO("deposito.borrado"),
-    LIMPIAR_BASE_EJECUTADO("limpiar_base.ejecutado");
+    LIMPIAR_BASE_EJECUTADO("limpiar_base.ejecutado"),
+
+    // --- modelo de lectura (E6) ---
+    EVENTO_PUBLICADO("evento.publicado"),
+    EVENTO_PUBLICACION_FALLIDA("evento.publicacion.fallida"),
+    EVENTOS_REPUBLICADOS("eventos.republicados");
 
     private final String action;
 

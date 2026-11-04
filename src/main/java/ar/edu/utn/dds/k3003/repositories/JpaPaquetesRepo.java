@@ -13,6 +13,8 @@ public interface JpaPaquetesRepo extends JpaRepository<Paquete, Long> {
 
     List<Paquete> findByDeposito_Id(Long depositoId);
 
+    List<Paquete> findByDonacionID(String donacionID);
+
     // delete(entity) es un no-op cuando el paquete todavia esta referenciado por la
     // coleccion stockActual de su Deposito (cascade=ALL sin orphanRemoval). Bulk delete
     // por ID evita el problema porque no depende del grafo de entidades cargado.

@@ -3,17 +3,26 @@ package ar.edu.utn.dds.k3003.model;
 import ar.edu.utn.dds.k3003.catedra.dtos.logistica.TipoAlgoritmoEnum;
 import ar.edu.utn.dds.k3003.exceptions.CantidadDeProductoInvalida;
 import ar.edu.utn.dds.k3003.exceptions.DepositoLleno;
+import ar.edu.utn.dds.k3003.eventos.PublicadorDeCambios;
 import jakarta.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
+@EntityListeners(PublicadorDeCambios.class)
 @Table(name = "depositos")
 public class Deposito {
 
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
+  // Versión optimista (JPA). Viaja en cada evento del modelo de lectura (E6): el consumidor solo
+  // aplica snapshots con versión mayor a la que ya tiene. El default de columna cubre las filas
+  // existentes cuando ddl-auto=update agrega la columna.
+  @Version
+  @Column(name = "version", columnDefinition = "bigint default 0")
+  private Long version;
 
   @Enumerated(EnumType.STRING)
   private TipoAlgoritmoEnum algoritmo;
@@ -49,6 +58,7 @@ public class Deposito {
   }
 
   public Long getId() { return id; }
+  public Long getVersion() { return version; }
   public void setId(Long id) { this.id = id; }
   public TipoAlgoritmoEnum getAlgoritmo() { return algoritmo; }
   public void setAlgoritmo(TipoAlgoritmoEnum algoritmo) { this.algoritmo = algoritmo; }

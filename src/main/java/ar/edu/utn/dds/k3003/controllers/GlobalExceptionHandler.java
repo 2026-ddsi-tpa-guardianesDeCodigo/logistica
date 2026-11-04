@@ -97,6 +97,16 @@ public class GlobalExceptionHandler {
     // Único lugar donde se logea una excepción no manejada, con stack trace. Los errores 4xx del
     // propio framework (ruta inexistente, método/media type no soportado, falta un parámetro) se
     // devuelven con su status: el access log (WARN) ya deja constancia.
+    /** Dos escrituras concurrentes sobre la misma fila (@Version): se pide reintentar. */
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<String> handleConflictoDeVersion(RuntimeException e) {
+        LOG.evento(EventoLog.VALIDATION_FAILED, "Conflicto de versión")
+                .dato("error.type", e.getClass().getSimpleName())
+                .outcome(Outcome.FAILURE).warn().emitir();
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body("El recurso fue modificado por otra operación; reintentar");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleUnexpected(Exception e) {
         if (e instanceof ErrorResponse respuesta) {
