@@ -95,7 +95,13 @@ public class LogisticaController {
   }
 
   @GetMapping("/asignaciones")
-  public ResponseEntity<List<AsignacionDTO>> getAllAsignaciones() {
+  public ResponseEntity<List<AsignacionDTO>> getAllAsignaciones(
+      @RequestParam(name = "donacionID", required = false) String donacionID) {
+    // donacionID es opcional: sin él se listan todas (contrato original). Con él se filtra por la
+    // donación de origen, para que el MCP pueda esperar la asignación de una donación puntual.
+    if (donacionID != null && !donacionID.isBlank()) {
+      return ResponseEntity.ok(fachada.obtenerAsignacionesDeDonacion(donacionID));
+    }
     return ResponseEntity.ok(fachada.obtenerTodasLasAsignaciones());
   }
 

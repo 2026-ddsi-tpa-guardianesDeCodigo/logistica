@@ -309,6 +309,7 @@ public class LogisticaService {
             val asignacion = new Asignacion(
                     paqueteAsignado.getId().toString(), necesidadElegidaID, LocalDateTime.now(), ASIGNADA,
                     OrigenAsignacionEnum.MATCHMAKING);
+            asignacion.setDepositoID(depositoID);
             asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
         }
 
@@ -449,6 +450,7 @@ public class LogisticaService {
         }
         val asignacion = new Asignacion(paqueteDTO.id(), decision.necesidadElegidaID(), LocalDateTime.now(),
                 ASIGNADA, OrigenAsignacionEnum.MATCHMAKING);
+        asignacion.setDepositoID(depositoID);
         val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
         matchmakingsEjecutados.increment();
         LOG.evento(EventoLog.MATCHMAKING_DECIDIDO, "Matchmaking decidido")
@@ -567,6 +569,12 @@ public class LogisticaService {
                 .map(logisticaDataMapper::toDepositoDTO).toList();
     }
 
+    public List<AsignacionDTO> obtenerAsignacionesDeDonacion(String donacionID) {
+        return logisticaRepository.obtenerAsignacionesDeDonacion(donacionID).stream()
+                .map(logisticaDataMapper::toAsignacionDTO)
+                .toList();
+    }
+
     public List<AsignacionDTO> obtenerTodasLasAsignaciones() {
         return logisticaRepository.obtenerTodasLasAsignaciones().stream()
                 .map(logisticaDataMapper::toAsignacionDTO).toList();
@@ -632,6 +640,9 @@ public class LogisticaService {
             val asignacion = new Asignacion(
                     paqueteAsignado.getId().toString(), necesidadID, LocalDateTime.now(), ASIGNADA,
                     OrigenAsignacionEnum.SOLICITUD_DIRECTA);
+            if (paquete.getDeposito() != null) {
+                asignacion.setDepositoID(String.valueOf(paquete.getDeposito().getId()));
+            }
             val asignacionGuardada = logisticaRepository.guardarAsignacion(asignacion);
             asignaciones.add(logisticaDataMapper.toAsignacionDTO(asignacionGuardada));
             asignacionesSolicitudDirecta.increment();

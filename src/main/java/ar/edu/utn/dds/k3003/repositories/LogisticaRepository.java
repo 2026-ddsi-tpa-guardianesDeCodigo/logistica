@@ -8,7 +8,9 @@ import ar.edu.utn.dds.k3003.model.Paquete;
 import ar.edu.utn.dds.k3003.repositories.JpaAsignacionesRepo;
 import ar.edu.utn.dds.k3003.repositories.JpaDepositosRepo;
 import ar.edu.utn.dds.k3003.repositories.JpaPaquetesRepo;
+import ar.edu.utn.dds.k3003.eventos.CambioDeStock;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -23,6 +25,8 @@ public class LogisticaRepository {
     private JpaAsignacionesRepo asignacionesRepo;
     @Autowired
     private JpaPaquetesRepo paquetesRepo;
+    @Autowired
+    private ApplicationEventPublisher eventos;
 
     // ── Depósitos ──────────────────────────────────────────────
 
@@ -64,6 +68,14 @@ public class LogisticaRepository {
         return asignacionesRepo.findAll();
     }
 
+    /** Asignaciones cuyo paquete salió de esa donación (D12: el MCP espera a que se asigne). */
+    public List<Asignacion> obtenerAsignacionesDeDonacion(String donacionID) {
+        List<String> paqueteIDs = paquetesRepo.findByDonacionID(donacionID).stream()
+                .map(p -> String.valueOf(p.getId()))
+                .toList();
+        return paqueteIDs.isEmpty() ? List.of() : asignacionesRepo.findByPaqueteIDIn(paqueteIDs);
+    }
+
     public List<Asignacion> obtenerEntregas() {
         return asignacionesRepo.findByEstado(EstadoAsginacionEnum.COMPLETADA);
     }
@@ -99,5 +111,9 @@ public class LogisticaRepository {
 
     public void eliminarPaquete(Paquete paquete) {
         paquetesRepo.eliminarPorId(paquete.getId());
+        // El borrado masivo por JPQL no pasa por los listeners de JPA: el stock se avisa a mano.
+        if (paquete.getDeposito() != null) {
+            eventos.publishEvent(new CambioDeStock(paquete.getDeposito().getId(), paquete.getProducto()));
+        }
     }
 }

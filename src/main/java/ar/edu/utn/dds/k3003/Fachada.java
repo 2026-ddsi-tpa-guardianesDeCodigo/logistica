@@ -98,6 +98,10 @@ public class Fachada implements FachadaLogistica {
     return logisticaService.obtenerTodosLosDepositos();
   }
 
+  public List<AsignacionDTO> obtenerAsignacionesDeDonacion(String donacionID) {
+    return logisticaService.obtenerAsignacionesDeDonacion(donacionID);
+  }
+
   public List<AsignacionDTO> obtenerTodasLasAsignaciones() {
     return logisticaService.obtenerTodasLasAsignaciones();
   }
