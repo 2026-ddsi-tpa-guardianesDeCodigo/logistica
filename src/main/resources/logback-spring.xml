@@ -8,7 +8,15 @@
       pisaría el logging ECS/legible que ya funciona en los 4 entornos.
     -->
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <!-- console-appender.xml ignora logging.structured.format.console: ECS necesita el structured. -->
+    <if condition='!property("LOG_FORMAT").isEmpty()'>
+        <then>
+            <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
+        </then>
+        <else>
+            <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        </else>
+    </if>
 
     <!--
       Appender de Better Stack (logs centralizados, docs/logging-spec_v1.md). Solo se activa si
